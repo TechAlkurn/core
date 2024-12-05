@@ -67,3 +67,10 @@ func WriteFile(fileName string, buf *bytes.Buffer) {
 	file.Write(buf.Bytes())
 	defer file.Close() // Close the file when the function exits
 }
+
+func DeleteFile(fileName string) error {
+	if err := os.Remove(fileName); err != nil {
+		return err
+	}
+	return nil
+}
