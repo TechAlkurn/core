@@ -34,7 +34,7 @@ func InArray(str string, s []string) bool {
 	return false
 }
 
-func AnyInArray(str any, s []any) bool {
+func AnyInArray(str any, s []interface{}) bool {
 	for _, v := range s {
 		if v == str {
 			return true
@@ -73,7 +73,7 @@ func Current(slice map[any]any, position int) interface{} {
 	return nil
 }
 
-func CurrentMapIntAny(slice map[int]any, position int) interface{} {
+func CurrentMapIntAny(slice map[int]interface{}, position int) interface{} {
 	for i, val := range slice {
 		if position == 0 {
 			return val
@@ -165,23 +165,6 @@ func RemoveItem(s []uint32, i uint32) []uint32 {
 	return s[:len(s)-1]
 }
 
-/*
-	return ArrayMap(items, func(item interface{}) interface{} {
-			if itemMap, ok := item.(map[string]interface{}); ok {
-				item, _ = json.Marshal(itemMap)
-				item = json.Unmarshal(item.([]byte), &item)
-			}
-
-			if itemObj, ok := item.(map[string]interface{}); ok && itemObj["catalog_id"] != nil {
-				if model := (&UserCatalog{}).FindOne(map[string]interface{}{"id": itemObj["catalog_id"]}); model != nil {
-					item = model.UserId
-				} else {
-					item = nil
-				}
-			}
-			return item
-		})
-*/
 func ArrayMap(items []interface{}, f func(interface{}) interface{}) []interface{} {
 	result := make([]interface{}, len(items))
 	for i, item := range items {
