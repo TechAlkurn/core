@@ -17,7 +17,7 @@ import (
 	"golang.org/x/text/language"
 )
 
-func ParseBody(r *http.Request, x interface{}) {
+func ParseBody(r *http.Request, x any) {
 	if body, err := io.ReadAll(r.Body); err == nil {
 		if err := json.Unmarshal(body, x); err != nil {
 			return
@@ -59,7 +59,7 @@ func MarshalToUnmarshal(r any, x any) error {
 }
 
 // It is applicable for structure
-func StructHasField(v interface{}, name string) bool {
+func StructHasField(v any, name string) bool {
 	rv := reflect.ValueOf(v)
 	if rv.Kind() == reflect.Ptr {
 		rv = rv.Elem()
@@ -71,7 +71,7 @@ func StructHasField(v interface{}, name string) bool {
 }
 
 // It is applicable for structure
-func HasField(v interface{}, name string) bool {
+func HasField(v any, name string) bool {
 	rv := reflect.ValueOf(v)
 	if rv.Kind() == reflect.Ptr {
 		rv = rv.Elem()
@@ -129,7 +129,7 @@ func IpAdressPort(c *gin.Context) string {
 	return host[1]
 }
 
-func SiteUrl(template_url string, params map[string]interface{}) string {
+func SiteUrl(template_url string, params map[string]any) string {
 	// var url string
 	url := os.Getenv("domainBase")
 	if strings.Contains(template_url, "://") {
@@ -158,7 +158,7 @@ func Translate(message string, params map[string]any) string {
 	return Strtr(message, placeholders)
 }
 
-func Empty(val interface{}) bool {
+func Empty(val any) bool {
 	v := reflect.ValueOf(val)
 	switch v.Kind() {
 	case reflect.String, reflect.Array, reflect.Map, reflect.Slice:
@@ -194,8 +194,8 @@ func ExtractValue(model any, field string) (string, error) {
 	return fmt.Sprintf("%v", val), nil
 }
 
-func ReflectValue(fields map[string]any, i any) map[string]interface{} {
-	table_fields := map[string]interface{}{}
+func ReflectValue(fields map[string]any, i any) map[string]any {
+	table_fields := map[string]any{}
 	modelValue := reflect.ValueOf(i).Elem()
 	typeOfT := modelValue.Type()
 	for fname, val := range fields {

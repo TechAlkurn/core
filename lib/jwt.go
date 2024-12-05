@@ -21,7 +21,7 @@ var privateKey = []byte(os.Getenv("SECRET_KEY"))
 
 func getToken(bearerToken string) (*jwt.Token, error) {
 	strToken := TokenFromRequest(bearerToken)
-	token, err := jwt.Parse(strToken, func(token *jwt.Token) (interface{}, error) {
+	token, err := jwt.Parse(strToken, func(token *jwt.Token) (any, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}

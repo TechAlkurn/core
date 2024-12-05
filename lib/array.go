@@ -6,19 +6,19 @@ import (
 	"strings"
 )
 
-func ArrayMerge(ss ...[]interface{}) []interface{} {
+func ArrayMerge(ss ...[]any) []any {
 	n := 0
 	for _, v := range ss {
 		n += len(v)
 	}
-	s := make([]interface{}, 0, n)
+	s := make([]any, 0, n)
 	for _, v := range ss {
 		s = append(s, v...)
 	}
 	return s
 }
 
-func ArrayKeyExists(item string, items map[interface{}]interface{}) bool {
+func ArrayKeyExists(item string, items map[any]any) bool {
 	if _, ok := items[item]; ok {
 		return true
 	}
@@ -34,7 +34,7 @@ func InArray(str string, s []string) bool {
 	return false
 }
 
-func AnyInArray(str any, s []interface{}) bool {
+func AnyInArray(str any, s []any) bool {
 	for _, v := range s {
 		if v == str {
 			return true
@@ -61,7 +61,7 @@ func Uint32InArray(str uint32, s []uint32) bool {
 	return false
 }
 
-func Current(slice map[any]any, position int) interface{} {
+func Current(slice map[any]any, position int) any {
 	for i, val := range slice {
 		if position == 0 {
 			return val
@@ -73,7 +73,7 @@ func Current(slice map[any]any, position int) interface{} {
 	return nil
 }
 
-func CurrentMapIntAny(slice map[int]interface{}, position int) interface{} {
+func CurrentMapIntAny(slice map[int]any, position int) any {
 	for i, val := range slice {
 		if position == 0 {
 			return val
@@ -165,16 +165,16 @@ func RemoveItem(s []uint32, i uint32) []uint32 {
 	return s[:len(s)-1]
 }
 
-func ArrayMap(items []interface{}, f func(interface{}) interface{}) []interface{} {
-	result := make([]interface{}, len(items))
+func ArrayMap(items []any, f func(any) any) []any {
+	result := make([]any, len(items))
 	for i, item := range items {
 		result[i] = f(item)
 	}
 	return result
 }
 
-func ArrayValues(elements map[interface{}]interface{}) []interface{} {
-	i, vals := 0, make([]interface{}, len(elements))
+func ArrayValues(elements map[any]any) []any {
+	i, vals := 0, make([]any, len(elements))
 	for _, val := range elements {
 		vals[i] = val
 		i++
@@ -182,7 +182,7 @@ func ArrayValues(elements map[interface{}]interface{}) []interface{} {
 	return vals
 }
 
-func Ksort(elements map[interface{}]interface{}) map[interface{}]interface{} {
+func Ksort(elements map[any]any) map[any]any {
 	// Check if all keys are strings
 	keys := make([]string, 0, len(elements))
 	for key := range elements {
@@ -198,7 +198,7 @@ func Ksort(elements map[interface{}]interface{}) map[interface{}]interface{} {
 	sort.Strings(keys)
 
 	// Create a new map with sorted keys
-	data := make(map[interface{}]interface{})
+	data := make(map[any]any)
 	for _, key := range keys {
 		data[key] = elements[key]
 	}
