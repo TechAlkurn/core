@@ -1,32 +1,18 @@
 package lib
 
 import (
-	"bytes"
-	"context"
 	"fmt"
 	"image"
 	"image/color"
-	"image/jpeg"
 	"log"
-	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 
-	"app/pkg/config"
-
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/disintegration/imaging"
-	"github.com/minio/minio-go/v7"
-	"github.com/nfnt/resize"
 )
 
 func Thumb(file string, width int, height int) string {
-	if config.IsAwsS3 {
-		thumb := _thumbS3(file, width, height)
-		return fmt.Sprintf("%s/%s", os.Getenv("S3_CDN_ENDPOINT"), thumb)
-	}
 	env_cache := os.Getenv("cache")
 	env_image := os.Getenv("image")
 	env_storage := os.Getenv("storage")
@@ -90,6 +76,21 @@ func GenerateThumb(originalURL string, width int, height int) string {
 	return thumb
 }
 
+func generateCacheKey(originalURL string, width, height int) string {
+	// Extract the filename from the URL
+	chunks := strings.Split(originalURL, "/")
+	basename := chunks[len(chunks)-1]
+	base := strings.Split(basename, ".")
+
+	// Generate a unique cache key based on the filename and dimensions
+	newbasename := fmt.Sprintf("%s-%dx%d.%s", base[0], width, height, base[1])
+	cacheURL := strings.Replace(originalURL, "storage", "cache", 1)
+	cacheURL = strings.Replace(cacheURL, basename, newbasename, 1)
+	// config.Log.Println("cacheURL:", cacheURL)
+	return cacheURL
+}
+
+/*
 func _thumbS3(originalURL string, width int, height int) string {
 	cacheKey, _ := ThumbS3(originalURL, width, height)
 	// cacheKey := fmt.Sprintf("uploads/storage/%s", originalURL)
@@ -138,19 +139,7 @@ func _thumbS3(originalURL string, width int, height int) string {
 	return cacheKey
 }
 
-func generateCacheKey(originalURL string, width, height int) string {
-	// Extract the filename from the URL
-	chunks := strings.Split(originalURL, "/")
-	basename := chunks[len(chunks)-1]
-	base := strings.Split(basename, ".")
 
-	// Generate a unique cache key based on the filename and dimensions
-	newbasename := fmt.Sprintf("%s-%dx%d.%s", base[0], width, height, base[1])
-	cacheURL := strings.Replace(originalURL, "storage", "cache", 1)
-	cacheURL = strings.Replace(cacheURL, basename, newbasename, 1)
-	// config.Log.Println("cacheURL:", cacheURL)
-	return cacheURL
-}
 
 func isCached(cacheKey string) bool {
 	// Check if the resized image is already cached in DigitalOcean Spaces
@@ -212,3 +201,4 @@ func uploadToS3(fileName string, buffer *bytes.Buffer) (err error) {
 	})
 	return
 }
+*/

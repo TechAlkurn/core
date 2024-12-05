@@ -5,16 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"net"
 	"net/http"
 	"os"
 	"reflect"
 	"strconv"
 	"strings"
-
-	"app/pkg/core/request"
-	"app/pkg/protos/gen"
 
 	"github.com/gin-gonic/gin"
 	"golang.org/x/text/cases"
@@ -211,29 +207,6 @@ func ReflectValue(fields map[string]any, i any) map[string]interface{} {
 		}
 	}
 	return table_fields
-}
-
-func ContextRequest(query string) request.Request {
-	return request.NewRequest(query)
-}
-
-func Request(query string) *request.Context {
-	req := request.Context{Uri: query}
-	req.PgRequest()
-	return &req
-}
-
-func Dbug(data any) {
-	log.Printf("%+v", data)
-	os.Exit(1)
-}
-
-func Response(data any) (*gen.Response, error) {
-	raw, err := json.Marshal(data)
-	if err != nil {
-		return nil, err
-	}
-	return &gen.Response{Data: raw}, nil
 }
 
 func QueryParams() {
