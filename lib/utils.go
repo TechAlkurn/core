@@ -47,6 +47,11 @@ func ToMarshal(r any) (j []byte) {
 	return
 }
 
+func ToMapped(data []byte) (obj map[string]any) {
+	ToUnmarshal(data, &obj)
+	return
+}
+
 func ToUnmarshal(r []byte, x any) error {
 	if Empty(r) {
 		return errors.New("invalid json/byte: r")
