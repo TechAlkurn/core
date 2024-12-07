@@ -160,9 +160,55 @@ func Intersection(a, b []string) (c []string) {
 	return
 }
 
-func RemoveItem(s []uint32, i uint32) []uint32 {
-	s[i] = s[len(s)-1]
-	return s[:len(s)-1]
+func IntRemoveItemByIndex(slice []int, index int) []int {
+	if index < 0 || index >= len(slice) {
+		return slice // Index out of range, return original slice
+	}
+	return append(slice[:index], slice[index+1:]...)
+}
+
+func IntRemoveItemByValue(slice []int, value int) []int {
+	result := []int{}
+	for _, v := range slice {
+		if v != value {
+			result = append(result, v)
+		}
+	}
+	return result
+}
+
+func Uint32RemoveItemByIndex(slice []uint32, index int) []uint32 {
+	if index < 0 || index >= len(slice) {
+		return slice // Index out of range, return original slice
+	}
+	return append(slice[:index], slice[index+1:]...)
+}
+
+func Uint32RemoveItemByValue(slice []uint32, value uint32) []uint32 {
+	result := []uint32{}
+	for _, v := range slice {
+		if v != value {
+			result = append(result, v)
+		}
+	}
+	return result
+}
+
+func StringRemoveItemByIndex(slice []string, index int) []string {
+	if index < 0 || index >= len(slice) {
+		return slice // Index out of range, return original slice
+	}
+	return append(slice[:index], slice[index+1:]...)
+}
+
+func StringRemoveItemByValue(slice []string, value string) []string {
+	result := []string{}
+	for _, v := range slice {
+		if v != value {
+			result = append(result, v)
+		}
+	}
+	return result
 }
 
 func ArrayMap(items []any, f func(any) any) []any {
