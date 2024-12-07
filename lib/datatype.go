@@ -85,3 +85,20 @@ func BindJSON(c *gin.Context) (form map[string]any, err error) {
 	}
 	return nil, nil
 }
+
+func BindJSONForm(c *gin.Context, args ...map[string]any) (j []byte) {
+	var request map[string]any
+	if err := c.ShouldBindJSON(&request); err != nil {
+		return nil
+	}
+	if item, ok := request["form"]; ok {
+		form := item.(map[string]any)
+		for _, arg := range args {
+			for argk, argv := range arg {
+				form[argk] = argv
+			}
+		}
+		return ToMarshal(form)
+	}
+	return nil
+}
