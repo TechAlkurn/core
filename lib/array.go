@@ -160,6 +160,11 @@ func Intersection(a, b []string) (c []string) {
 	return
 }
 
+func RemoveItem(s []uint32, i uint32) []uint32 {
+	s[i] = s[len(s)-1]
+	return s[:len(s)-1]
+}
+
 func IntRemoveItemByIndex(slice []int, index int) []int {
 	if index < 0 || index >= len(slice) {
 		return slice // Index out of range, return original slice
