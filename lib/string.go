@@ -120,3 +120,23 @@ func ParseTimeString(str string) (int64, error) {
 	// Convert target time to Unix timestamp (seconds since Unix epoch)
 	return targetTime.Unix(), nil
 }
+
+func GetFirstAndLastDay(month, year, format string) (int64, int64) {
+	months := map[string]time.Month{
+		"Jan": time.January, "January": time.January, "1": time.January,
+		"Feb": time.February, "February": time.February, "2": time.February,
+		"Mar": time.March, "March": time.March, "3": time.March,
+		"Apr": time.April, "April": time.April, "4": time.April,
+		"May": time.May, "5": time.May,
+		"Jun": time.June, "June": time.June, "6": time.June,
+		"Jul": time.July, "July": time.July, "7": time.July,
+		"Aug": time.August, "August": time.August, "8": time.August,
+		"Sep": time.September, "September": time.September, "9": time.September,
+		"Oct": time.October, "October": time.October, "10": time.October,
+		"Nov": time.November, "November": time.November, "11": time.November,
+		"Dec": time.December, "December": time.December, "12": time.December,
+	}
+	firstDay := time.Date(ToInt(year), months[month], 1, 0, 0, 0, 0, time.UTC)
+	lastDay := firstDay.AddDate(0, 1, 0).Add(-time.Second)
+	return firstDay.Unix(), lastDay.Unix()
+}
