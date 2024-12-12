@@ -74,6 +74,10 @@ func ToCamelCase(str string) string {
 	return cases.Title(language.English, cases.Compact).String(str)
 }
 
+func ToLower(s string) string {
+	return strings.ToLower(s)
+}
+
 func Slugify(s string) string {
 	s = unidecode.Unidecode(s)
 	s = ReInValidChar.ReplaceAllString(s, Separator)
