@@ -104,6 +104,30 @@ func TokenFromRequest(bearerToken string) string {
 	return ""
 }
 
+type jwtClaim struct {
+	LoggedId uint32 `json:"logged_id"`
+	jwt.StandardClaims
+}
+
+func JwtGenerate(userId uint32) string {
+	claims := &jwtClaim{
+		userId,
+		jwt.StandardClaims{
+			ExpiresAt: time.Now().Add(time.Hour * 24 * 365 * 5).Unix(),
+			Issuer:    "Alkurn",
+			IssuedAt:  time.Now().Unix(),
+		},
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+
+	// encoded the web token
+	t, err := token.SignedString([]byte(os.Getenv("SECRET_KEY")))
+	if err != nil {
+		panic(err)
+	}
+	return t
+}
+
 func GenerateJWT(userId uint32) (string, error) {
 	privateKey := []byte(os.Getenv("SECRET_KEY"))
 	if len(privateKey) == 0 {
