@@ -114,7 +114,7 @@ func JwtGenerate(userId uint32) string {
 		userId,
 		jwt.StandardClaims{
 			ExpiresAt: time.Now().Add(time.Hour * 24 * 365 * 5).Unix(),
-			Issuer:    "Alkurn",
+			Issuer:    os.Getenv("SITE_NAME"),
 			IssuedAt:  time.Now().Unix(),
 		},
 	}
