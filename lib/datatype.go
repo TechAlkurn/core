@@ -42,17 +42,17 @@ func ToUint(s string) uint {
 }
 
 func ToInt32(s string) int32 {
-	num, _ := strconv.ParseUint(s, 10, 32)
+	num, _ := strconv.ParseInt(s, 10, 32)
 	return int32(num)
 }
 
 func ToInt64(s string) int64 {
-	num, _ := strconv.ParseUint(s, 10, 64)
+	num, _ := strconv.ParseInt(s, 10, 64)
 	return int64(num)
 }
 
 func ToInt(s string) int {
-	num, _ := strconv.ParseUint(s, 10, 64)
+	num, _ := strconv.ParseInt(s, 10, 64)
 	return int(num)
 }
 
