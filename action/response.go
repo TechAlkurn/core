@@ -38,7 +38,6 @@ type R struct {
 }
 
 // Response setting gin.JSON: Pending:-> work on Response
-
 func (g *Gin) Response(raw *gen.Response) {
 	var res interface{}
 	err := json.Unmarshal(raw.Data, &res)
