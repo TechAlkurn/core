@@ -83,6 +83,10 @@ func Time() int64 {
 	return time.Now().Unix()
 }
 
+func DateTime() string {
+	return time.Now().Format(time.DateTime)
+}
+
 // time id millseconds
 func TimeToDateFormat(dt int64) string {
 	return time.Unix(0, (int64(dt) * 1000)).Format(time.DateTime)
