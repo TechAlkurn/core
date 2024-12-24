@@ -14,50 +14,45 @@ func ToString(s any) string {
 	return str
 }
 
-func ToUint32(s string) uint32 {
-	num, _ := strconv.ParseUint(s, 10, 32)
-	return uint32(num)
-}
-
-func ToUint32FromAny(s any) uint32 {
+func ToUint32(s any) uint32 {
 	str := fmt.Sprintf("%v", s)
 	num, _ := strconv.ParseUint(str, 10, 32)
 	return uint32(num)
 }
 
-func ToUint64FromAny(s any) uint64 {
+func ToUint64(s any) uint64 {
 	str := fmt.Sprintf("%v", s)
 	num, _ := strconv.ParseUint(str, 10, 64)
 	return uint64(num)
 }
 
-func ToUint64(s string) uint64 {
-	num, _ := strconv.ParseUint(s, 10, 64)
-	return uint64(num)
-}
-
-func ToUint(s string) uint {
-	num, _ := strconv.ParseUint(s, 10, 64)
+func ToUint(s any) uint {
+	str := fmt.Sprintf("%v", s)
+	num, _ := strconv.ParseUint(str, 10, 64)
 	return uint(num)
 }
 
-func ToInt32(s string) int32 {
-	num, _ := strconv.ParseInt(s, 10, 32)
+func ToInt32(s any) int32 {
+	str := fmt.Sprintf("%v", s)
+	num, _ := strconv.ParseInt(str, 10, 32)
 	return int32(num)
 }
 
-func ToInt64(s string) int64 {
-	num, _ := strconv.ParseInt(s, 10, 64)
+func ToInt64(s any) int64 {
+	str := fmt.Sprintf("%v", s)
+	num, _ := strconv.ParseInt(str, 10, 64)
 	return int64(num)
 }
 
-func ToInt(s string) int {
-	num, _ := strconv.ParseInt(s, 10, 64)
+func ToInt(s any) int {
+	str := fmt.Sprintf("%v", s)
+	num, _ := strconv.ParseInt(str, 10, 64)
 	return int(num)
 }
 
-func ToFloat64(s string) float64 {
-	num, _ := strconv.ParseFloat(s, 64)
+func ToFloat64(s any) float64 {
+	str := fmt.Sprintf("%v", s)
+	num, _ := strconv.ParseFloat(str, 64)
 	return float64(num)
 }
 
@@ -84,10 +79,6 @@ func BindJSON(c *gin.Context) (form map[string]any, err error) {
 		return item.(map[string]any), nil
 	}
 	return nil, nil
-}
-
-func BindJSONForm(c *gin.Context, args ...map[string]any) (j []byte) {
-	return ShouldBindJSON(c, args...)
 }
 
 func ShouldBindJSON(c *gin.Context, args ...map[string]any) (j []byte) {
