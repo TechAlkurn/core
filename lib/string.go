@@ -66,3 +66,10 @@ func StripTags(content string) string {
 func ParseID(data []byte) (string, bool) {
 	return string(data), false
 }
+
+func TruncateWord(s string, max int) string {
+	if max > len(s) {
+		return s
+	}
+	return s[:strings.LastIndexAny(s[:max], " .,:;-")]
+}
