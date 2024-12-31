@@ -1,6 +1,7 @@
 package lib
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"regexp"
@@ -89,14 +90,20 @@ func ShouldBindJSON(c *gin.Context, args ...map[string]any) (j []byte) {
 	if err := c.ShouldBindJSON(&request); err != nil {
 		return nil
 	}
-	if item, ok := request["form"]; ok {
-		form := item.(map[string]any)
-		for _, arg := range args {
-			for argk, argv := range arg {
-				form[argk] = argv
-			}
-		}
-		return ToMarshal(form)
+	form, ok := request["form"].(map[string]any)
+	if !ok {
+		return nil
 	}
-	return nil
+	// Merge additional arguments into the "form" map
+	for _, arg := range args {
+		for key, value := range arg {
+			form[key] = value
+		}
+	}
+	// Marshal the modified "form" map into JSON
+	data, err := json.Marshal(form)
+	if err != nil {
+		return nil
+	}
+	return data
 }
