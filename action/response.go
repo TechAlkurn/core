@@ -1,7 +1,6 @@
 package action
 
 import (
-	"app/pkg/protos/gen"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -37,15 +36,17 @@ type R struct {
 }
 
 // Response setting gin.JSON: Pending:-> work on Response
-func (g *Gin) Response(raw *gen.Response) {
+
+func (g *Gin) Response(rawData []byte) {
 	var res interface{}
-	err := json.Unmarshal(raw.Data, &res)
+	err := json.Unmarshal(rawData, &res)
 	if err != nil {
 		g.Abort(err)
 		return
 	}
 	param := J{Mode: false, Status: http.StatusOK}
 	var req interface{}
+
 	switch d := res.(type) {
 	case map[string]interface{}:
 		message := g._message(d)
@@ -118,12 +119,4 @@ func (g *Gin) Failed(code int, err error) {
 		Message: g._extract(err),
 	})
 	g.C.Abort()
-}
-
-func Response(data any) (*gen.Response, error) {
-	raw, err := json.Marshal(data)
-	if err != nil {
-		return nil, err
-	}
-	return &gen.Response{Data: raw}, nil
 }
