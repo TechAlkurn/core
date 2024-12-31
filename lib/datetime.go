@@ -88,6 +88,6 @@ func DateTime() string {
 }
 
 // time id millseconds
-func TimeToDateFormat(dt int64) string {
-	return time.Unix(0, (int64(dt) * 1000)).Format(time.DateTime)
+func TimeToDateFormat(sec, nsec int64) string {
+	return time.Unix(sec, nsec).Format(time.DateTime)
 }
