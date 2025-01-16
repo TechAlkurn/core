@@ -186,6 +186,10 @@ func IsNull(val any) bool {
 	return val == nil || val == "" || Empty(val)
 }
 
+func IsNil(val any) bool {
+	return IsNull(val)
+}
+
 func ExtractValue(model any, field string) (string, error) {
 	modelValue := reflect.ValueOf(model)
 	if modelValue.Kind() != reflect.Ptr {
