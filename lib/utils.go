@@ -182,6 +182,10 @@ func Empty(val any) bool {
 	return reflect.DeepEqual(val, reflect.Zero(v.Type()).Interface())
 }
 
+func IsNull(val any) bool {
+	return val == nil || val == "" || Empty(val)
+}
+
 func ExtractValue(model any, field string) (string, error) {
 	modelValue := reflect.ValueOf(model)
 	if modelValue.Kind() != reflect.Ptr {
