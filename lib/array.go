@@ -257,15 +257,13 @@ func Ksort(elements map[any]any) map[any]any {
 	return data
 }
 
-func ConvertToUint32Array(anySlice any) ([]uint32, error) {
-	var uint32Slice []uint32
-
-	for _, value := range anySlice.([]any) {
+func ConvertToUint32Array(s any) ([]uint32, error) {
+	var ss []uint32
+	for _, value := range s.([]any) {
 		// Type assertion to check if value is uint32
-		uint32Slice = append(uint32Slice, ToUint32(ToString(value)))
+		ss = append(ss, ToUint32(value))
 	}
-
-	return uint32Slice, nil
+	return ss, nil
 }
 
 func SelectionNotification(selection string) []uint32 {
