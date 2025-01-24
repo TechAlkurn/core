@@ -88,10 +88,8 @@ func Pluck(slice interface{}, fieldName string) []interface{} {
 	if sliceValue.Kind() != reflect.Slice {
 		panic("Pluck: first argument must be a slice")
 	}
-
 	// Prepare a result slice
 	result := make([]interface{}, 0, sliceValue.Len())
-
 	// Iterate over the slice
 	for i := 0; i < sliceValue.Len(); i++ {
 		// Get the element of the slice
