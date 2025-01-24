@@ -81,3 +81,37 @@ func DirtyAttributes(model any, attributes map[string]any) map[string]any {
 func ValidationAuthclient(source, sourceId string) bool {
 	return true
 }
+
+func Pluck(slice interface{}, fieldName string) []interface{} {
+	// Ensure the input is a slice
+	sliceValue := reflect.ValueOf(slice)
+	if sliceValue.Kind() != reflect.Slice {
+		panic("Pluck: first argument must be a slice")
+	}
+
+	// Prepare a result slice
+	result := make([]interface{}, 0, sliceValue.Len())
+
+	// Iterate over the slice
+	for i := 0; i < sliceValue.Len(); i++ {
+		// Get the element of the slice
+		item := sliceValue.Index(i)
+		// Ensure the element is a struct or a pointer to a struct
+		if item.Kind() == reflect.Ptr {
+			item = item.Elem()
+		}
+		if item.Kind() != reflect.Struct {
+			panic("Pluck: slice elements must be structs or pointers to structs")
+		}
+
+		// Extract the field value
+		fieldValue := item.FieldByName(fieldName)
+		if !fieldValue.IsValid() {
+			panic("Pluck: field '" + fieldName + "' does not exist in struct")
+		}
+		// Append the field value to the result
+		result = append(result, fieldValue.Interface())
+	}
+
+	return result
+}
