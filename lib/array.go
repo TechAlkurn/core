@@ -2,7 +2,9 @@ package lib
 
 import (
 	"fmt"
+	"net/url"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -277,4 +279,23 @@ func SelectionNotification(selection string) []uint32 {
 		}
 	}
 	return sel
+}
+
+func MapToURLParams(data map[string]any) string {
+	params := url.Values{}
+	for key, value := range data {
+		switch v := value.(type) {
+		case string:
+			params.Set(key, v)
+		case int:
+			params.Set(key, strconv.Itoa(v))
+		case bool:
+			params.Set(key, strconv.FormatBool(v))
+		case float64:
+			params.Set(key, fmt.Sprintf("%f", v))
+		default:
+			params.Set(key, fmt.Sprintf("%v", v))
+		}
+	}
+	return params.Encode()
 }
