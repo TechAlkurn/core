@@ -21,7 +21,7 @@ func Thumb(file string, width int, height int) string {
 	thumb := fmt.Sprintf("%s-%d-%d.%s", thumbs[0], width, height, thumbs[len(thumbs)-1])
 	cache_thumb := fmt.Sprintf("%s/%s", env_cache, thumb)
 	image_thumb := fmt.Sprintf("%s/%s", env_image, thumb)
-	org_image_thumb := fmt.Sprintf("%s/%s", storage_path, thumb)
+	org_image_thumb := fmt.Sprintf("%s/%s", storage_path, file)
 	file = fmt.Sprintf("%s/%s", env_storage, file)
 
 	if FileIsNotExist(file) {
@@ -29,7 +29,7 @@ func Thumb(file string, width int, height int) string {
 		thumb = fmt.Sprintf("%s-%d-%d.%s", thumbs[0], width, height, thumbs[len(thumbs)-1])
 		cache_thumb = fmt.Sprintf("%s/%s", env_cache, thumb)
 		image_thumb = fmt.Sprintf("%s/%s", env_image, thumb)
-		org_image_thumb = fmt.Sprintf("%s/%s", storage_path, thumb)
+		org_image_thumb = fmt.Sprintf("%s/%s", storage_path, file)
 		file = fmt.Sprintf("%s/%s", env_storage, "default.png")
 	}
 
