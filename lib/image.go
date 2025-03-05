@@ -41,11 +41,9 @@ func Thumb(file string, width int, height int) string {
 			return org_image_thumb
 		}
 	}
-
 	if FileIsExist(cache_thumb) {
 		return image_thumb
 	}
-
 	// load images and make 100x100 thumbnails of them
 	var thumbnail image.Image
 	img, err := imaging.Open(file)
