@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"image"
 	"image/color"
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -35,7 +34,8 @@ func Thumb(file string, width int, height int) string {
 	if _, err := os.Stat(dir); os.IsNotExist(err) {
 		err = os.MkdirAll(dir, 0o755)
 		if err != nil {
-			log.Fatal(err)
+			// log.Fatal(err)
+			return image_thumb
 		}
 	}
 
@@ -47,7 +47,8 @@ func Thumb(file string, width int, height int) string {
 	var thumbnail image.Image
 	img, err := imaging.Open(file)
 	if err != nil {
-		log.Fatal(err)
+		// log.Fatal(err)
+		return image_thumb
 	}
 	thumbnail = imaging.Thumbnail(img, width, height, imaging.CatmullRom)
 	// create a new blank image
@@ -58,7 +59,8 @@ func Thumb(file string, width int, height int) string {
 	// save the combined image to file
 	err = imaging.Save(dst, cache_thumb)
 	if err != nil {
-		log.Fatal(err)
+		// log.Fatal(err)
+		return image_thumb
 	}
 	// log.Println("image_thumb:", image_thumb)
 	return image_thumb
