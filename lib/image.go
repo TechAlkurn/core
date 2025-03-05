@@ -15,11 +15,13 @@ func Thumb(file string, width int, height int) string {
 	env_cache := os.Getenv("cache")
 	env_image := os.Getenv("image")
 	env_storage := os.Getenv("storage")
+	storage_path := os.Getenv("storagePath")
 
 	thumbs := strings.Split(file, ".")
 	thumb := fmt.Sprintf("%s-%d-%d.%s", thumbs[0], width, height, thumbs[len(thumbs)-1])
 	cache_thumb := fmt.Sprintf("%s/%s", env_cache, thumb)
 	image_thumb := fmt.Sprintf("%s/%s", env_image, thumb)
+	org_image_thumb := fmt.Sprintf("%s/%s", storage_path, thumb)
 	file = fmt.Sprintf("%s/%s", env_storage, file)
 
 	if FileIsNotExist(file) {
@@ -27,6 +29,7 @@ func Thumb(file string, width int, height int) string {
 		thumb = fmt.Sprintf("%s-%d-%d.%s", thumbs[0], width, height, thumbs[len(thumbs)-1])
 		cache_thumb = fmt.Sprintf("%s/%s", env_cache, thumb)
 		image_thumb = fmt.Sprintf("%s/%s", env_image, thumb)
+		org_image_thumb = fmt.Sprintf("%s/%s", storage_path, thumb)
 		file = fmt.Sprintf("%s/%s", env_storage, "default.png")
 	}
 
@@ -35,7 +38,7 @@ func Thumb(file string, width int, height int) string {
 		err = os.MkdirAll(dir, 0o755)
 		if err != nil {
 			// log.Fatal(err)
-			return image_thumb
+			return org_image_thumb
 		}
 	}
 
@@ -48,7 +51,7 @@ func Thumb(file string, width int, height int) string {
 	img, err := imaging.Open(file)
 	if err != nil {
 		// log.Fatal(err)
-		return image_thumb
+		return org_image_thumb
 	}
 	thumbnail = imaging.Thumbnail(img, width, height, imaging.CatmullRom)
 	// create a new blank image
@@ -60,9 +63,8 @@ func Thumb(file string, width int, height int) string {
 	err = imaging.Save(dst, cache_thumb)
 	if err != nil {
 		// log.Fatal(err)
-		return image_thumb
+		return org_image_thumb
 	}
-	// log.Println("image_thumb:", image_thumb)
 	return image_thumb
 }
 
