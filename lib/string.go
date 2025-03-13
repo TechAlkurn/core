@@ -45,6 +45,15 @@ func ToCamelCase(str string) string {
 	return cases.Title(language.English, cases.Compact).String(str)
 }
 
+// Namify formats a given string into a clean, lowercase, underscore-separated name.
+func Namify(s string) string {
+	// Trim spaces from start and end
+	s = Slugify(s)
+	s = regexp.MustCompile(`[^a-z0-9\s]+`).ReplaceAllString(s, "_")
+	s = strings.ReplaceAll(s, "-", "_")
+	return s
+}
+
 func ToLower(s string) string {
 	return strings.ToLower(s)
 }
