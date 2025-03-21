@@ -6,15 +6,10 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
+	"github.com/TechAlkurn/core/cache"
 	"github.com/golang-jwt/jwt"
-)
-
-var (
-	loggedUser = make(map[string]any)
-	mu         sync.Mutex // Mutex for concurrent access to the map
 )
 
 var privateKey = []byte(os.Getenv("SECRET_KEY"))
@@ -40,44 +35,49 @@ func ValidateJWT(str string) error {
 	}
 	claims, ok := token.Claims.(jwt.MapClaims)
 	if ok && token.Valid {
-		userId := claims["id"].(float64)
-		SetLoggedUser("id", uint32(userId))
+		if item, ok := claims["id"]; ok {
+			SetLoggedUser("id", item)
+		}
 		return nil
 	}
 	return errors.New("authentication required")
 }
 
 func LoggedUser(str string) (uint32, error) {
-	err := ValidateJWT(str)
-	if err != nil {
+	if err := ValidateJWT(str); err != nil {
 		return 0, err
 	}
 	token, _ := getToken(str)
 	claims, _ := token.Claims.(jwt.MapClaims)
-	userId := uint32(claims["id"].(float64))
-	return userId, nil
+	if item, ok := claims["id"]; ok {
+		return ToUint32(item), nil
+	}
+	return 0, nil
 }
 
 func SetLoggedUser(key string, value any) {
-	mu.Lock()
-	defer mu.Unlock()
-	loggedUser[key] = value
+	cache.NewRWMutexCache().Set(key, value)
 }
 
 func GetLoggedUser(key string) any {
-	mu.Lock()
-	defer mu.Unlock()
-	return loggedUser[key]
+	if val, ok := cache.NewRWMutexCache().Get(key); ok {
+		return val
+	}
+	return false
 }
 
 func GetLoggedId() uint32 {
-	user_id, _ := strconv.ParseUint(fmt.Sprintf("%v", GetLoggedUser("id")), 10, 64)
-	return uint32(user_id)
+	if item, ok := cache.NewRWMutexCache().Get("id"); ok {
+		return ToUint32(item)
+	}
+	return 0
 }
 
 func LoggedId() uint32 {
-	user_id, _ := strconv.ParseUint(fmt.Sprintf("%v", GetLoggedUser("id")), 10, 64)
-	return uint32(user_id)
+	if item, ok := cache.NewRWMutexCache().Get("id"); ok {
+		return ToUint32(item)
+	}
+	return 0
 }
 
 func IsOwner(user_id uint32) bool {
@@ -85,9 +85,8 @@ func IsOwner(user_id uint32) bool {
 }
 
 func FindAction(str string, controller string) (string, error) {
-	_, err := LoggedUser(str)
 	action := "public-index"
-	if err == nil {
+	if _, err := LoggedUser(str); err == nil {
 		action = "index"
 	}
 	if controller == "authentication" {
@@ -96,12 +95,11 @@ func FindAction(str string, controller string) (string, error) {
 	return action, nil
 }
 
-func TokenFromRequest(bearerToken string) string {
-	splitToken := strings.Split(bearerToken, " ")
-	if len(splitToken) == 2 {
-		return splitToken[1]
+func TokenFromRequest(bearerToken string) (token string) {
+	if splitToken := strings.Split(bearerToken, " "); len(splitToken) == 2 {
+		token = splitToken[1]
 	}
-	return ""
+	return token
 }
 
 type jwtClaim struct {
@@ -119,7 +117,6 @@ func JwtGenerate(userId uint32) string {
 		},
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-
 	// encoded the web token
 	t, err := token.SignedString([]byte(os.Getenv("SECRET_KEY")))
 	if err != nil {
@@ -143,8 +140,7 @@ func GenerateJWT(userId uint32) (string, error) {
 		"nbf": time.Now().Unix(),
 		"eat": time.Now().Add(time.Second * time.Duration(tokenTTL)).Unix(),
 	}
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claimsParams)
-	return token.SignedString(privateKey)
+	return jwt.NewWithClaims(jwt.SigningMethodHS256, claimsParams).SignedString(privateKey)
 }
 
 func FindHostName() string {
