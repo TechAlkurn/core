@@ -68,7 +68,6 @@ func DirtyAttributes(model any, attributes map[string]any) map[string]any {
 	for key := range modelAttributes {
 		keyAttributes = append(keyAttributes, key)
 	}
-
 	mapAttributes := make(map[string]any)
 	for key := range attributes {
 		if InArray(key, keyAttributes) {
@@ -101,7 +100,6 @@ func Pluck(slice interface{}, fieldName string) []interface{} {
 		if item.Kind() != reflect.Struct {
 			panic("Pluck: slice elements must be structs or pointers to structs")
 		}
-
 		// Extract the field value
 		fieldValue := item.FieldByName(fieldName)
 		if !fieldValue.IsValid() {
