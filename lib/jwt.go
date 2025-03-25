@@ -56,7 +56,7 @@ func LoggedUser(str string) (uint32, error) {
 }
 
 func SetLoggedUser(key string, value any) {
-	cache.NewRWMutexCache().Set(key, value)
+	cache.NewMutexCache().Set(key, value)
 }
 
 func GetLoggedUser(key string) any {
