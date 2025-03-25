@@ -21,20 +21,20 @@ func (c *rWMutexCache) Get(key string) (any, bool) {
 }
 
 func (c *rWMutexCache) Set(key string, value any) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 	c.store[key] = value
 }
 
 func (c *rWMutexCache) Delete(key string) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 	delete(c.store, key)
 }
 
 func (c *rWMutexCache) Flush() {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 	c.store = make(map[string]any)
 }
 
@@ -82,14 +82,14 @@ func (c *rWMutexCache) Range(f func(key string, value any) bool) {
 }
 
 func (c *rWMutexCache) Clear() {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 	c.store = make(map[string]any)
 }
 
 func (c *rWMutexCache) SetDefault(key string, value any) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 	if _, ok := c.store[key]; !ok {
 		c.store[key] = value
 	}
@@ -105,8 +105,8 @@ func (c *rWMutexCache) GetDefault(key string, defaultValue any) any {
 }
 
 func (c *rWMutexCache) GetOrSet(key string, value any) any {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 	if _, ok := c.store[key]; !ok {
 		c.store[key] = value
 	}
@@ -114,8 +114,8 @@ func (c *rWMutexCache) GetOrSet(key string, value any) any {
 }
 
 func (c *rWMutexCache) GetOrSetDefault(key string, value any, defaultValue any) any {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 	if _, ok := c.store[key]; !ok {
 		c.store[key] = value
 		return value
@@ -124,8 +124,8 @@ func (c *rWMutexCache) GetOrSetDefault(key string, value any, defaultValue any) 
 }
 
 func (c *rWMutexCache) GetOrSetFunc(key string, f func() any) any {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 	if _, ok := c.store[key]; !ok {
 		c.store[key] = f()
 	}
@@ -133,8 +133,8 @@ func (c *rWMutexCache) GetOrSetFunc(key string, f func() any) any {
 }
 
 func (c *rWMutexCache) GetOrSetFuncDefault(key string, f func() any, defaultValue any) any {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 	if _, ok := c.store[key]; !ok {
 		c.store[key] = f()
 		return f()
@@ -143,8 +143,8 @@ func (c *rWMutexCache) GetOrSetFuncDefault(key string, f func() any, defaultValu
 }
 
 func (c *rWMutexCache) GetOrSetFuncLock(key string, f func() any) any {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 	if _, ok := c.store[key]; !ok {
 		c.store[key] = f()
 	}
@@ -152,8 +152,8 @@ func (c *rWMutexCache) GetOrSetFuncLock(key string, f func() any) any {
 }
 
 func (c *rWMutexCache) GetOrSetFuncLockDefault(key string, f func() any, defaultValue any) any {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 	if _, ok := c.store[key]; !ok {
 		c.store[key] = f()
 		return f()
