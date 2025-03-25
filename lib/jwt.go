@@ -14,7 +14,7 @@ import (
 
 var (
 	mu         sync.Mutex
-	loggedUser = make(map[string]any)
+	muStorage  = make(map[string]any)
 	privateKey = []byte(os.Getenv("SECRET_KEY"))
 )
 
@@ -40,7 +40,7 @@ func ValidateJWT(str string) error {
 	claims, ok := token.Claims.(jwt.MapClaims)
 	if ok && token.Valid {
 		if item, ok := claims["id"]; ok {
-			SetLoggedUser("id", item)
+			SetMuStorage("id", item)
 		}
 		return nil
 	}
@@ -59,27 +59,31 @@ func LoggedUser(str string) (uint32, error) {
 	return 0, nil
 }
 
-func SetLoggedUser(key string, value any) {
+func SetMuStorage(key string, value any) {
 	mu.Lock()
 	defer mu.Unlock()
-	loggedUser[key] = value
+	muStorage[key] = value
 }
 
-func GetLoggedUser(key string) uint32 {
+func GetMuStorage(key string) any {
 	mu.Lock()
 	defer mu.Unlock()
-	if loginId, ok := loggedUser[key]; ok {
-		return ToUint32(loginId)
+	if val, ok := muStorage[key]; ok {
+		return val
 	}
 	return 0
 }
 
 func GetLoggedId() uint32 {
-	return GetLoggedUser("id")
+	val := GetMuStorage("id")
+	if !IsNil(val) || Empty(val) {
+		return ToUint32(val)
+	}
+	return 0
 }
 
 func LoggedId() uint32 {
-	return GetLoggedUser("id")
+	return GetLoggedId()
 }
 
 func IsOwner(user_id uint32) bool {
