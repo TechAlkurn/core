@@ -59,6 +59,10 @@ func LoggedUser(str string) (uint32, error) {
 	return 0, nil
 }
 
+func SetLoggedUser(key string, value any) {
+	SetMuStorage(key, value)
+}
+
 func SetMuStorage(key string, value any) {
 	mu.Lock()
 	defer mu.Unlock()
