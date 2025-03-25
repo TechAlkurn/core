@@ -13,8 +13,8 @@ import (
 )
 
 var (
-	loggedUser = make(map[string]any)
 	mu         sync.Mutex
+	loggedUser = make(map[string]any)
 	privateKey = []byte(os.Getenv("SECRET_KEY"))
 )
 
