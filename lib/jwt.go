@@ -60,21 +60,21 @@ func SetLoggedUser(key string, value any) {
 }
 
 func GetLoggedUser(key string) any {
-	if val, ok := cache.NewRWMutexCache().Get(key); ok {
+	if val, ok := cache.NewMutexCache().Get(key); ok {
 		return val
 	}
 	return false
 }
 
 func GetLoggedId() uint32 {
-	if item, ok := cache.NewRWMutexCache().Get("id"); ok {
+	if item, ok := cache.NewMutexCache().Get("id"); ok {
 		return ToUint32(item)
 	}
 	return 0
 }
 
 func LoggedId() uint32 {
-	if item, ok := cache.NewRWMutexCache().Get("id"); ok {
+	if item, ok := cache.NewMutexCache().Get("id"); ok {
 		return ToUint32(item)
 	}
 	return 0
