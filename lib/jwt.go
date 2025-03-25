@@ -6,13 +6,17 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
-	"github.com/TechAlkurn/core/cache"
 	"github.com/golang-jwt/jwt"
 )
 
-var privateKey = []byte(os.Getenv("SECRET_KEY"))
+var (
+	loggedUser = make(map[string]any)
+	mu         sync.Mutex
+	privateKey = []byte(os.Getenv("SECRET_KEY"))
+)
 
 func getToken(bearerToken string) (*jwt.Token, error) {
 	strToken := TokenFromRequest(bearerToken)
@@ -56,28 +60,26 @@ func LoggedUser(str string) (uint32, error) {
 }
 
 func SetLoggedUser(key string, value any) {
-	cache.NewMutexCache().Set(key, value)
+	mu.Lock()
+	defer mu.Unlock()
+	loggedUser[key] = value
 }
 
-func GetLoggedUser(key string) any {
-	if val, ok := cache.NewMutexCache().Get(key); ok {
-		return val
+func GetLoggedUser(key string) uint32 {
+	mu.Lock()
+	defer mu.Unlock()
+	if loginId, ok := loggedUser[key]; !ok {
+		return ToUint32(loginId)
 	}
-	return false
+	return 0
 }
 
 func GetLoggedId() uint32 {
-	if item, ok := cache.NewMutexCache().Get("id"); ok {
-		return ToUint32(item)
-	}
-	return 0
+	return GetLoggedUser("id")
 }
 
 func LoggedId() uint32 {
-	if item, ok := cache.NewMutexCache().Get("id"); ok {
-		return ToUint32(item)
-	}
-	return 0
+	return GetLoggedUser("id")
 }
 
 func IsOwner(user_id uint32) bool {
