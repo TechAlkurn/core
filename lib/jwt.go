@@ -68,7 +68,7 @@ func SetLoggedUser(key string, value any) {
 func GetLoggedUser(key string) uint32 {
 	mu.Lock()
 	defer mu.Unlock()
-	if loginId, ok := loggedUser[key]; !ok {
+	if loginId, ok := loggedUser[key]; ok {
 		return ToUint32(loginId)
 	}
 	return 0
