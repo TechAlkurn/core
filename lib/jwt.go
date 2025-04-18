@@ -63,20 +63,29 @@ func SetLoggedUser(key string, value any) {
 	SetMuStorage(key, value)
 }
 
+func UnSetLoggedUser() {
+	mu.Lock()
+	defer mu.Unlock()
+	delete(muStorage, "id")
+}
+
+func Has(key string) bool {
+	mu.Lock()
+	defer mu.Unlock()
+	_, ok := muStorage[key]
+	return ok
+}
+
+func Clear() {
+	mu.Lock()
+	defer mu.Unlock()
+	muStorage = make(map[string]any)
+}
+
 func SetMuStorage(key string, value any) {
 	mu.Lock()
 	defer mu.Unlock()
 	muStorage[key] = value
-}
-
-func MuStorageKeys() []string {
-	mu.Lock()
-	defer mu.Unlock()
-	keys := make([]string, 0, len(muStorage))
-	for key := range muStorage {
-		keys = append(keys, key)
-	}
-	return keys
 }
 
 func GetMuStorage(key string) any {
