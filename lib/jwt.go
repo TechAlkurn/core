@@ -69,6 +69,16 @@ func SetMuStorage(key string, value any) {
 	muStorage[key] = value
 }
 
+func MuStorageKeys() []string {
+	mu.Lock()
+	defer mu.Unlock()
+	keys := make([]string, 0, len(muStorage))
+	for key := range muStorage {
+		keys = append(keys, key)
+	}
+	return keys
+}
+
 func GetMuStorage(key string) any {
 	mu.Lock()
 	defer mu.Unlock()
