@@ -1,6 +1,7 @@
 package lib
 
 import (
+	"os"
 	"reflect"
 	"strings"
 )
@@ -110,4 +111,11 @@ func Pluck(slice interface{}, fieldName string) []interface{} {
 	}
 
 	return result
+}
+
+func DefaultEnv(key, val string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return val
 }
