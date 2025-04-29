@@ -59,6 +59,7 @@ func ReadCsv(fileName string) ([][]string, error) {
 	return csv.NewReader(file).ReadAll()
 }
 
+
 func WriteFile(fileName string, buf *bytes.Buffer) {
 	file, err := os.Create(fileName)
 	if err != nil {
@@ -74,3 +75,29 @@ func DeleteFile(fileName string) error {
 	}
 	return nil
 }
+
+func ReadJSONFile(fileName string) (data any, err error) {
+	jsonData, err := os.ReadFile(fileName)
+	if err != nil {
+		log.Fatalf("Error reading JSON file: %v", err)
+	}
+	// Define a variable to store the decoded JSON data
+	// Unmarshal the JSON data into the struct
+	err = json.Unmarshal(jsonData, &data)
+	if err != nil {
+		log.Fatalf("Error unmarshalling JSON: %v", err)
+	}
+	return
+}
+
+func ReadContentFile(fileName string) (content string, err error) {
+	data, err := os.ReadFile(fileName)
+	if err != nil {
+		log.Fatalf("Error reading JSON file: %v", err)
+	}
+	// Define a variable to store the decoded JSON data
+	// Unmarshal the JSON data into the struct
+	content = string(data)
+	return
+}
+
