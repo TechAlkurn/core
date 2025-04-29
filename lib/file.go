@@ -3,6 +3,7 @@ package lib
 import (
 	"bytes"
 	"encoding/csv"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -59,7 +60,6 @@ func ReadCsv(fileName string) ([][]string, error) {
 	return csv.NewReader(file).ReadAll()
 }
 
-
 func WriteFile(fileName string, buf *bytes.Buffer) {
 	file, err := os.Create(fileName)
 	if err != nil {
@@ -100,4 +100,3 @@ func ReadContentFile(fileName string) (content string, err error) {
 	content = string(data)
 	return
 }
-
