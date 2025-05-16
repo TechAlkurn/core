@@ -2,8 +2,12 @@ package action
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
+	"sync"
+
+	"app/pkg/protos/gen"
 
 	"github.com/TechAlkurn/core/lib"
 	"github.com/gin-gonic/gin"
@@ -29,43 +33,53 @@ type BaseResponse struct {
 }
 
 // Response setting gin.JSON: Pending:-> work on Response
-func (g *Gin) Response(rawData []byte) {
+func (g *Gin) Response(raw *gen.Response) {
 	if g.C == nil {
 		Log.Error("Nil context in response handler")
 		return
 	}
-	// Check if context is already canceled
-	select {
-	case <-g.C.Request.Context().Done():
-		Log.Warn("Request context canceled before response",
+
+	// Check for context cancellation early
+	if ctxErr := g.C.Request.Context().Err(); ctxErr != nil {
+		Log.Debug("Aborting response due to context error",
 			zap.String("path", g.C.FullPath()),
-			zap.Error(g.C.Request.Context().Err()),
+			zap.Error(ctxErr),
 		)
 		return
-	default:
 	}
 
-	// Early return if writer is already closed
 	if g.C.Writer.Written() {
-		Log.Warn("Attempted write to closed writer",
+		Log.Warn("Attempted duplicate response write", zap.String("path", g.C.FullPath()))
+		return
+	}
+
+	if g.C.Writer.Status() != http.StatusOK {
+		Log.Warn("Failed to write response",
+			zap.Int("status", g.C.Writer.Status()),
 			zap.String("path", g.C.FullPath()),
 		)
 		return
 	}
-	// Create response object
-	response := BaseResponse{
-		Status: http.StatusOK,
-		Data:   []any{}, // Default empty array
-	}
 
+	// Create response object
+	// Default empty array
+	response := BaseResponse{Status: http.StatusOK, Data: []any{}}
+	// Handle status code validation
+	if status := raw.GetStatus(); status >= 100 && status <= 599 {
+		response.Status = int(status)
+	} else {
+		Log.Warn("Invalid status code received", zap.Int32("proto_status", status), zap.String("path", g.C.FullPath()))
+	}
+	g.C.Header("Content-Type", "application/json")
 	// Safely handle empty responses
-	if len(rawData) == 0 {
+	rawData := raw.Data
+	if lib.IsNil(rawData) {
 		response.Data = []any{} // Set empty array instead of object
 		g.C.JSON(http.StatusOK, response)
 		return
 	}
 
-	// Handle empty responses
+	// Convert Protobuf Struct to Go map
 	if len(rawData) > 0 {
 		var parsedData any
 		if err := json.Unmarshal(rawData, &parsedData); err != nil {
@@ -91,38 +105,31 @@ func (g *Gin) Response(rawData []byte) {
 			}
 		}
 	}
-
-	// Safe write with context monitoring
 	g.safeJSONWrite(response)
 }
 
 // Thread-safe JSON writer with context monitoring
 func (g *Gin) safeJSONWrite(response BaseResponse) {
-	// Create context-aware writer
 	ctx := g.C.Request.Context()
-	// Use a channel to capture write completion
-	done := make(chan struct{})
+	// Check if the client is already gone before writing
+	if ctx.Err() != nil {
+		Log.Warn("Client disconnected before response write",
+			zap.String("path", g.C.FullPath()),
+			zap.Error(ctx.Err()),
+		)
+		g.C.Abort()
+		return
+	}
 
-	go func() {
-		defer close(done)
-		g.C.JSON(http.StatusOK, response)
-	}()
+	// Write response synchronously
+	g.C.JSON(http.StatusOK, response)
 
-	select {
-	case <-done:
-		// Response written successfully
-		if g.C.Writer.Status() != http.StatusOK {
-			Log.Warn("Failed to write response",
-				zap.Int("status", g.C.Writer.Status()),
-				zap.String("path", g.C.FullPath()),
-			)
-		}
-	case <-ctx.Done():
+	// Verify if the write succeeded
+	if ctx.Err() != nil {
 		Log.Warn("Client disconnected during response write",
 			zap.String("path", g.C.FullPath()),
 			zap.Error(ctx.Err()),
 		)
-		// Abort any ongoing processing
 		g.C.Abort()
 	}
 }
@@ -173,4 +180,46 @@ func (g *Gin) cleanErrorMessage(err error) string {
 	}
 	// Sanitize sensitive information
 	return lib.ToString(msg)
+}
+
+type SafeResponseWriter struct {
+	gin.ResponseWriter
+	mu     sync.Mutex
+	wrote  bool
+	status int
+}
+
+func (w *SafeResponseWriter) Write(data []byte) (int, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	if w.wrote {
+		return 0, fmt.Errorf("response already written")
+	}
+	w.wrote = true
+	return w.ResponseWriter.Write(data)
+}
+
+func (w *SafeResponseWriter) WriteHeader(code int) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	if !w.wrote {
+		w.status = code
+		w.ResponseWriter.WriteHeader(code)
+	}
+}
+
+// Middleware to wrap the response writer
+func SafeResponseMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		writer := &SafeResponseWriter{ResponseWriter: c.Writer}
+		c.Writer = writer
+		c.Next()
+
+		// Finalize status code if not set
+		if !writer.wrote && writer.status == 0 {
+			writer.WriteHeader(http.StatusOK)
+		}
+	}
 }
