@@ -12,3 +12,9 @@ func JsonDecode(data string) (map[string]any, error) {
 	err := json.Unmarshal([]byte(data), &d)
 	return d, err
 }
+
+func ToJson(data any) (js map[string]any) {
+	j, _ := json.Marshal(data)
+	json.Unmarshal(j, &js)
+	return js
+}
