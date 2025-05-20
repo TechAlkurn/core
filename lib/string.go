@@ -3,6 +3,7 @@ package lib
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"regexp"
 	"strings"
 
@@ -105,4 +106,79 @@ func HTMLToText(htmlContent string) string {
 	}
 	f(doc)
 	return html.UnescapeString(strings.TrimSpace(buf.String()))
+}
+
+func HTMLToText2(r io.Reader) (string, error) {
+	doc, err := html.Parse(r)
+	if err != nil {
+		return "", err
+	}
+
+	var buf strings.Builder
+	skip := false
+
+	blockTags := map[string]bool{
+		"p": true, "div": true, "h1": true, "h2": true, "h3": true,
+		"h4": true, "h5": true, "h6": true, "ul": true, "ol": true,
+		"li": true, "br": true, "hr": true, "table": true, "tr": true,
+		"td": true, "th": true, "pre": true, "blockquote": true,
+	}
+
+	var f func(*html.Node)
+	f = func(n *html.Node) {
+		if n.Type == html.ElementNode {
+			if n.Data == "script" || n.Data == "style" {
+				skip = true
+				return
+			}
+			if blockTags[n.Data] {
+				if buf.Len() > 0 {
+					buf.WriteByte('\n')
+				}
+			}
+			if n.Data == "br" || n.Data == "hr" {
+				buf.WriteByte('\n')
+			}
+		}
+
+		if !skip {
+			if n.Type == html.TextNode {
+				text := strings.TrimSpace(n.Data)
+				if text != "" {
+					buf.WriteString(text)
+					buf.WriteByte(' ')
+				}
+			}
+			for c := n.FirstChild; c != nil; c = c.NextSibling {
+				f(c)
+			}
+		}
+
+		if n.Type == html.ElementNode {
+			if n.Data == "script" || n.Data == "style" {
+				skip = false
+				return
+			}
+			if blockTags[n.Data] {
+				buf.WriteByte('\n')
+			}
+		}
+	}
+
+	f(doc)
+
+	// Post-process the text to collapse whitespace
+	text := buf.String()
+
+	// Collapse all whitespace sequences to a single space
+	text = strings.Join(strings.Fields(text), " ")
+
+	// Collapse multiple newlines to a single newline
+	re := regexp.MustCompile(`\n+`)
+	text = re.ReplaceAllString(text, "\n")
+
+	// Trim leading and trailing whitespace
+	text = strings.TrimSpace(text)
+
+	return text, nil
 }
