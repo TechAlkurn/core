@@ -1,11 +1,13 @@
 package lib
 
 import (
+	"bytes"
 	"fmt"
 	"regexp"
 	"strings"
 
 	"github.com/gosimple/unidecode"
+	"golang.org/x/net/html"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 )
@@ -81,4 +83,26 @@ func TruncateWord(s string, max int) string {
 		return s
 	}
 	return s[:strings.LastIndexAny(s[:max], " .,:;-")]
+}
+
+func HTMLToText(htmlContent string) string {
+	doc, err := html.Parse(strings.NewReader(htmlContent))
+	if err != nil {
+		return ""
+	}
+	var buf bytes.Buffer
+	var f func(*html.Node)
+	f = func(n *html.Node) {
+		if n.Type == html.TextNode {
+			buf.WriteString(n.Data)
+		}
+		if n.Type == html.ElementNode && (n.Data == "br" || n.Data == "p" || n.Data == "div" || n.Data == "li") {
+			buf.WriteString("\n")
+		}
+		for c := n.FirstChild; c != nil; c = c.NextSibling {
+			f(c)
+		}
+	}
+	f(doc)
+	return html.UnescapeString(strings.TrimSpace(buf.String()))
 }
