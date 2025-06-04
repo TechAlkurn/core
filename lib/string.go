@@ -6,6 +6,7 @@ import (
 	"io"
 	"regexp"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/gosimple/unidecode"
 	"golang.org/x/net/html"
@@ -181,4 +182,44 @@ func HTMLToText2(r io.Reader) (string, error) {
 	text = strings.TrimSpace(text)
 
 	return text, nil
+}
+
+func UTF8Decode(s string) string {
+	var builder strings.Builder
+	builder.Grow(len(s)) // Pre-allocate for efficiency
+	for i := 0; i < len(s); {
+		r, size := utf8.DecodeRuneInString(s[i:])
+		if r == utf8.RuneError && size == 1 {
+			// Invalid UTF-8 sequence (1 byte)
+			builder.WriteByte('?')
+			i += size
+		} else {
+			if r <= 0xFF { // Check if rune is within ISO-8859-1 range
+				builder.WriteByte(byte(r))
+			} else {
+				builder.WriteByte('?') // Character not representable in ISO-8859-1
+			}
+			i += size
+		}
+	}
+	return builder.String()
+}
+
+// UTF8Encode converts an ISO-8859-1 (Latin-1) encoded string to UTF-8
+func UTF8Encode(s string) string {
+	var builder strings.Builder
+	builder.Grow(len(s) * 2) // Pre-allocate for worst-case expansion (each char → 2 bytes)
+	for i := range len(s) {
+		// Convert each ISO-8859-1 byte directly to a Unicode code point
+		// (ISO-8859-1 maps 1:1 to first 256 Unicode code points)
+		builder.WriteRune(rune(s[i]))
+	}
+	return builder.String()
+}
+
+func ExtractLink(content string) []string {
+	// Regex for URLs (http/https/ftp/mailto)
+	urlRegex := `(https?|ftp|file|mailto):\/\/[^\s"'<>]+`
+	re := regexp.MustCompile(urlRegex)
+	return re.FindAllString(content, -1)
 }
