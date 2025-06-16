@@ -94,7 +94,7 @@ func GetMuStorage(key string) any {
 	if val, ok := muStorage[key]; ok {
 		return val
 	}
-	return 0
+	return nil
 }
 
 func GetLoggedId() uint32 {
