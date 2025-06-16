@@ -167,12 +167,10 @@ func Empty(val any) bool {
 	if val == nil {
 		return true
 	}
-
 	v := reflect.ValueOf(val)
 	if !v.IsValid() {
 		return true
 	}
-
 	switch v.Kind() {
 	case reflect.String, reflect.Array, reflect.Map, reflect.Slice:
 		return v.Len() == 0
@@ -190,7 +188,6 @@ func Empty(val any) bool {
 		}
 		return Empty(v.Elem().Interface())
 	}
-
 	// Fall back to deep equality check with zero value
 	zero := reflect.Zero(v.Type()).Interface()
 	return reflect.DeepEqual(val, zero)
