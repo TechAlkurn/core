@@ -99,7 +99,7 @@ func GetMuStorage(key string) any {
 
 func GetLoggedId() uint32 {
 	val := GetMuStorage("id")
-	if !IsNil(val) || Empty(val) {
+	if !IsNil(val) || !Empty(val) {
 		return ToUint32(val)
 	}
 	return 0
