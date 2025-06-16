@@ -164,7 +164,15 @@ func Translate(message string, params map[string]any) string {
 }
 
 func Empty(val any) bool {
+	if val == nil {
+		return true
+	}
+
 	v := reflect.ValueOf(val)
+	if !v.IsValid() {
+		return true
+	}
+
 	switch v.Kind() {
 	case reflect.String, reflect.Array, reflect.Map, reflect.Slice:
 		return v.Len() == 0
@@ -177,9 +185,15 @@ func Empty(val any) bool {
 	case reflect.Float32, reflect.Float64:
 		return v.Float() == 0
 	case reflect.Interface, reflect.Ptr:
-		return v.IsNil() || !v.IsValid()
+		if v.IsNil() {
+			return true
+		}
+		return Empty(v.Elem().Interface())
 	}
-	return reflect.DeepEqual(val, reflect.Zero(v.Type()).Interface())
+
+	// Fall back to deep equality check with zero value
+	zero := reflect.Zero(v.Type()).Interface()
+	return reflect.DeepEqual(val, zero)
 }
 
 func IsNull(val any) bool {
