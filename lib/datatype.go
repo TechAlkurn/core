@@ -10,9 +10,17 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func ToString(s any) string {
-	str := fmt.Sprintf("%v", s)
-	return str
+func ToString(v interface{}) string {
+	switch val := v.(type) {
+	case nil:
+		return ""
+	case string:
+		return val
+	case fmt.Stringer:
+		return val.String()
+	default:
+		return fmt.Sprintf("%v", val)
+	}
 }
 
 func ToUint32(s any) uint32 {
