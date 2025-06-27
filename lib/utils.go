@@ -213,11 +213,11 @@ func IsEmpty(val any) bool {
 }
 
 func IsNull(val any) bool {
-	return val == nil || val == "" || Empty(val)
+	return IsEmpty(val)
 }
 
 func IsNil(val any) bool {
-	return IsNull(val)
+	return val == nil || val == "" || Empty(val)
 }
 
 func ExtractValue(model any, field string) (string, error) {
