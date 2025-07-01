@@ -182,6 +182,10 @@ func Empty(val any) bool {
 	return reflect.DeepEqual(val, reflect.Zero(v.Type()).Interface())
 }
 
+func NotEmpty(val any) bool {
+	return !IsEmpty(val)
+}
+
 func IsEmpty(val any) bool {
 	if val == nil {
 		return true
