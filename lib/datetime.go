@@ -92,8 +92,8 @@ func TimeToDateFormat(sec, nsec int64) string {
 	return time.Unix(sec, nsec).Format(time.DateTime)
 }
 
-func ToTime(str any) *time.Time {
-	s, ok := str.(string)
+func ToTime(a any) *time.Time {
+	s, ok := a.(string)
 	if !ok {
 		return nil
 	}
