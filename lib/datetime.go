@@ -91,3 +91,16 @@ func DateTime() string {
 func TimeToDateFormat(sec, nsec int64) string {
 	return time.Unix(sec, nsec).Format(time.DateTime)
 }
+
+func ToTime(str any) *time.Time {
+	s, ok := str.(string)
+	if !ok {
+		return nil
+	}
+	// Try parsing with RFC3339 layout
+	t, err := time.Parse(time.RFC3339, s)
+	if err != nil {
+		return nil
+	}
+	return &t
+}
