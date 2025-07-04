@@ -1,11 +1,108 @@
 package lib
 
 import (
+	"database/sql/driver"
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
 	"time"
 )
+
+const customLayout = "2006-01-02 15:04:05"
+
+type DateTime struct {
+	time.Time
+}
+
+func NewDateTime(t *time.Time) *DateTime {
+	if t == nil {
+		return nil
+	}
+	return &DateTime{Time: *t}
+}
+
+// JSON Unmarshal
+func (dt *DateTime) UnmarshalJSON(b []byte) error {
+	s := strings.Trim(string(b), `"`)
+	if s == "" || s == "null" {
+		dt.Time = time.Time{}
+		return nil
+	}
+	t, err := time.Parse(customLayout, s)
+	if err != nil {
+		return err
+	}
+	dt.Time = t
+	return nil
+}
+
+// JSON Marshal
+func (dt DateTime) MarshalJSON() ([]byte, error) {
+	if dt.Time.IsZero() {
+		return json.Marshal(nil)
+	}
+	return json.Marshal(dt.Format(customLayout))
+}
+
+// SQL Valuer
+func (dt DateTime) Value() (driver.Value, error) {
+	// Convert to time.Time so database/sql can handle it
+	return dt.Time, nil
+}
+
+// SQL Scanner
+func (dt *DateTime) Scan(value any) error {
+	if value == nil {
+		dt.Time = time.Time{}
+		return nil
+	}
+
+	switch v := value.(type) {
+	case time.Time:
+		dt.Time = v
+		return nil
+	case []byte:
+		t, err := time.Parse(customLayout, string(v))
+		if err != nil {
+			return err
+		}
+		dt.Time = t
+		return nil
+	case string:
+		t, err := time.Parse(customLayout, v)
+		if err != nil {
+			return err
+		}
+		dt.Time = t
+		return nil
+	default:
+		return fmt.Errorf("cannot scan type %T into DateTime", value)
+	}
+}
+
+func (dt DateTime) String() string {
+	if dt.Time.IsZero() {
+		return ""
+	}
+	return dt.Format(customLayout)
+}
+
+func ToDateTimeString() string {
+	return time.Now().Format(time.DateTime)
+}
+
+func ToDateTime(input any) *DateTime {
+	if input == nil {
+		now := time.Now()
+		return &DateTime{Time: now}
+	}
+	t := ToTime(input)
+	if t == nil {
+		return nil
+	}
+	return &DateTime{Time: *t}
+}
 
 func GetFirstAndLastDay(month, year, format string) (int64, int64) {
 	months := map[string]time.Month{
@@ -81,10 +178,6 @@ func Microtime() int64 {
 
 func Time() int64 {
 	return time.Now().Unix()
-}
-
-func DateTime() string {
-	return time.Now().Format(time.DateTime)
 }
 
 // time id millseconds
