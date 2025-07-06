@@ -29,7 +29,7 @@ func (dt *DateTime) UnmarshalJSON(b []byte) error {
 		dt.Time = time.Time{}
 		return nil
 	}
-	t, err := time.Parse(customLayout, s)
+	t, err := time.ParseInLocation(customLayout, s, time.UTC) // ensure UTC
 	if err != nil {
 		return err
 	}
@@ -45,10 +45,11 @@ func (dt DateTime) MarshalJSON() ([]byte, error) {
 	return json.Marshal(dt.Format(customLayout))
 }
 
-// SQL Valuer
 func (dt DateTime) Value() (driver.Value, error) {
-	// Convert to time.Time so database/sql can handle it
-	return dt.Time, nil
+	if dt.Time.IsZero() {
+		return nil, nil
+	}
+	return dt.Time.UTC(), nil // ensure time sent to DB is UTC
 }
 
 // SQL Scanner
