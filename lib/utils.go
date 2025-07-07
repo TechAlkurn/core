@@ -256,14 +256,14 @@ func ReflectValue(fields map[string]any, i any) map[string]any {
 	return table_fields
 }
 
-func ReflectReference(mailer map[string]any) map[string]any {
-	for key, item := range mailer {
+func ReflectReference(data map[string]any) map[string]any {
+	for key, item := range data {
 		v := reflect.ValueOf(item)
 		if v.Kind() == reflect.Ptr && !v.IsNil() {
-			mailer[key] = v.Elem().Interface()
+			data[key] = v.Elem().Interface()
 		}
 	}
-	return mailer
+	return data
 }
 
 func QueryParams() {
