@@ -256,6 +256,16 @@ func ReflectValue(fields map[string]any, i any) map[string]any {
 	return table_fields
 }
 
+func ReflectReference(mailer map[string]any) map[string]any {
+	for key, item := range mailer {
+		v := reflect.ValueOf(item)
+		if v.Kind() == reflect.Ptr && !v.IsNil() {
+			mailer[key] = v.Elem().Interface()
+		}
+	}
+	return mailer
+}
+
 func QueryParams() {
 	// Get the current request
 	r := &http.Request{}
