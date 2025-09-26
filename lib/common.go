@@ -119,9 +119,9 @@ func DefaultEnv(key, val string) string {
 	return val
 }
 
-func Wrap[T any](fn func() T) func() (any, error) {
+func Wrap[T any](fn func() (T, error)) func() (any, error) {
 	return func() (any, error) {
-		return fn(), nil
+		return fn()
 	}
 }
 
