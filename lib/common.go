@@ -119,3 +119,10 @@ func DefaultEnv(key, val string) string {
 	}
 	return val
 }
+
+func wrap[T any](fn func() T) func() (any, error) {
+	return func() (any, error) {
+		return fn(), nil
+	}
+}
+
