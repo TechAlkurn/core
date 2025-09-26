@@ -12,7 +12,6 @@ func PrimaryKey(model any) map[string]string {
 	if valueOf.Kind() == reflect.Ptr {
 		valueOf = valueOf.Elem()
 	}
-
 	if valueOf.Kind() == reflect.Struct {
 		for i := 0; i < valueOf.NumField(); i++ {
 			field := valueOf.Type().Field(i)
