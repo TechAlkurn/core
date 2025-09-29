@@ -106,7 +106,7 @@ func ValidateToken(token string, signedJWTKey string) (any, error) {
 }
 
 func IsPasswordResetTokenValid(token string) bool {
-	if token == "" {
+	if IsEmpty(token) {
 		return false
 	}
 	timestamp := strings.Split(string(token), "_")
