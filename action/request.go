@@ -1,6 +1,7 @@
 package action
 
 import (
+	"fmt"
 	"net/http"
 	"net/url"
 )
@@ -12,35 +13,82 @@ type Context struct {
 
 type IRequest interface {
 	Query(key string) string
+	SetQueryParam(param string, value any)
+	DeleteQueryParam(param string)
+	HasQueryParam(param string) bool
+	ToQueryString() string
 	IgnoreNotification() bool
 }
 
 func NewRequest(uri string) IRequest {
-	req, _ := http.NewRequest("GET", "", nil)
-	parsedURL, _ := url.ParseQuery(uri)
-	req.URL.RawQuery = parsedURL.Encode()
-	return &Context{Uri: uri, Request: req}
+	req := &Context{Uri: uri}
+	req.PgRequest()
+	return req
 }
 
-func (r *Context) PgRequest() *http.Request {
-	req, _ := http.NewRequest("GET", "", nil)
-	parsedURL, _ := url.ParseQuery(r.Uri)
-	req.URL.RawQuery = parsedURL.Encode()
-	r.Request = req
+// Factory alternative
+func Request(query string) *Context {
+	req := &Context{Uri: query}
+	req.PgRequest()
 	return req
+}
+
+// Build *http.Request from raw query string
+func (r *Context) PgRequest() *http.Request {
+	httpReq, _ := http.NewRequest("GET", "", nil)
+
+	parsedQuery, _ := url.ParseQuery(r.Uri)
+	httpReq.URL.RawQuery = parsedQuery.Encode()
+
+	r.Request = httpReq
+	return httpReq
 }
 
 func (r *Context) Query(key string) string {
 	return r.Request.URL.Query().Get(key)
 }
 
-func (r *Context) IgnoreNotification() bool {
-	is_ignore := r.Query("is_ignore")
-	return is_ignore == "1" || is_ignore == "yes" || is_ignore == "YES" || is_ignore == "Yes"
+func (r *Context) HasQueryParam(key string) bool {
+	_, exists := r.Request.URL.Query()[key]
+	return exists
 }
 
-func Request(query string) *Context {
-	req := Context{Uri: query}
-	req.PgRequest()
-	return &req
+func (r *Context) SetQueryParam(param string, value any) {
+	q := r.Request.URL.Query()
+	q.Set(param, toString(value))
+
+	r.Request.URL.RawQuery = q.Encode()
+	r.Uri = q.Encode()
+}
+
+func (r *Context) DeleteQueryParam(param string) {
+	q := r.Request.URL.Query()
+	q.Del(param)
+
+	r.Request.URL.RawQuery = q.Encode()
+	r.Uri = q.Encode()
+}
+
+func (r *Context) ToQueryString() string {
+	return r.Request.URL.RawQuery
+}
+
+func (r *Context) IgnoreNotification() bool {
+	isIgnore := r.Query("is_ignore")
+	switch isIgnore {
+	case "1", "yes", "YES", "Yes":
+		return true
+	}
+	return false
+}
+
+func toString(v any) string {
+	switch t := v.(type) {
+	case string:
+		return t
+	case []byte:
+		return string(t)
+	default:
+		return fmt.Sprintf("%v", t)
+	}
 }
