@@ -14,6 +14,7 @@ type Context struct {
 type IRequest interface {
 	Query(key string) string
 	SetQueryParam(param string, value any)
+	SetQueryParams(param string, value any)
 	DeleteQueryParam(param string)
 	HasQueryParam(param string) bool
 	ToQueryString() string
@@ -59,6 +60,12 @@ func (r *Context) SetQueryParam(param string, value any) {
 
 	r.Request.URL.RawQuery = q.Encode()
 	r.Uri = q.Encode()
+}
+
+func (r *Context) SetQueryParams(params map[string]any) {
+	for key, value := range params {
+		r.SetQueryParam(key, value)
+	}
 }
 
 func (r *Context) DeleteQueryParam(param string) {
