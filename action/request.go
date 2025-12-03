@@ -14,7 +14,7 @@ type Context struct {
 type IRequest interface {
 	Query(key string) string
 	SetQueryParam(param string, value any)
-	SetQueryParams(param string, value any)
+	SetQueryParams(params map[string]any)
 	DeleteQueryParam(param string)
 	HasQueryParam(param string) bool
 	ToQueryString() string
