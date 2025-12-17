@@ -19,6 +19,7 @@ type IRequest interface {
 	HasQueryParam(param string) bool
 	ToQueryString() string
 	IgnoreNotification() bool
+	IsParam(arg string) bool
 }
 
 func NewRequest(uri string) IRequest {
@@ -87,6 +88,10 @@ func (r *Context) IgnoreNotification() bool {
 		return true
 	}
 	return false
+}
+
+func (r *Context) IsParam(arg string) bool {
+	return (r.Query(arg) != "")
 }
 
 func toString(v any) string {
