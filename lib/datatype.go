@@ -115,3 +115,178 @@ func ShouldBindJSON(c *gin.Context, args ...map[string]any) (j []byte) {
 	}
 	return data
 }
+
+// String returns a pointer to the string value passed in.
+func String(v string) *string {
+	return &v
+}
+
+// String returns a pointer to the string value passed in.
+func Int(v int) *int {
+	return &v
+}
+
+// String returns a pointer to the string value passed in.
+func Int8(v int8) *int8 {
+	return &v
+}
+
+// String returns a pointer to the string value passed in.
+func Int16(v int16) *int16 {
+	return &v
+}
+
+// String returns a pointer to the string value passed in.
+func Int32(v int32) *int32 {
+	return &v
+}
+
+// String returns a pointer to the string value passed in.
+func Int64(v int64) *int64 {
+	return &v
+}
+
+// String returns a pointer to the string value passed in.
+func Bool(v bool) *bool {
+	return &v
+}
+
+// String returns a pointer to the string value passed in.
+func Float32(v float32) *float32 {
+	return &v
+}
+
+// String returns a pointer to the string value passed in.
+func Float64(v float64) *float64 {
+	return &v
+}
+
+// String returns a pointer to the string value passed in.
+func Uint(v uint) *uint {
+	return &v
+}
+
+// String returns a pointer to the string value passed in.
+func Uint32(v uint32) *uint32 {
+	return &v
+}
+
+// String returns a pointer to the string value passed in.
+func Uint64(v uint64) *uint64 {
+	return &v
+}
+
+// String returns a pointer to the string value passed in.
+func Uint8(v uint8) *uint8 {
+	return &v
+}
+
+// String returns a pointer to the string value passed in.
+func Uint16(v uint16) *uint16 {
+	return &v
+}
+
+// String returns a pointer to the string value passed in.
+func Uintptr(v uintptr) *uintptr {
+	return &v
+}
+
+// String returns a pointer to the string value passed in.
+func Byte(v byte) *byte {
+	return &v
+}
+
+// String returns a pointer to the string value passed in.
+func Rune(v rune) *rune {
+	return &v
+}
+
+// String returns a pointer to the string value passed in.
+func Complex64(v complex64) *complex64 {
+	return &v
+}
+
+// String returns a pointer to the string value passed in.
+func Complex128(v complex128) *complex128 {
+	return &v
+}
+
+// String returns a pointer to the string value passed in.
+func Slice(v []string) *[]string {
+	return &v
+}
+
+// String returns a pointer to the string value passed in.
+func Map(v map[string]string) *map[string]string {
+	return &v
+}
+
+// String returns a pointer to the string value passed in.
+func Chan(v chan string) *chan string {
+	return &v
+}
+
+// String returns a pointer to the string value passed in.
+func Interface(v interface{}) *interface{} {
+	return &v
+}
+
+// String returns a pointer to the string value passed in.
+func Ptr(v *string) *string {
+	return v
+}
+
+// String returns a pointer to the string value passed in.
+func Any(v any) *any {
+	return &v
+}
+
+// String returns a pointer to the string value passed in.
+func StringSlice(v []string) *[]string {
+	return &v
+}
+
+// String returns a pointer to the string value passed in.
+func StringMap(v map[string]string) *map[string]string {
+	return &v
+}
+
+// String returns a pointer to the string value passed in.
+func StringChan(v chan string) *chan string {
+	return &v
+}
+
+// String returns a pointer to the string value passed in.
+func StringInterface(v interface{}) *interface{} {
+	return &v
+}
+
+// String returns a pointer to the string value passed in.
+func StringPtr(v *string) *string {
+	return v
+}
+
+// String returns a pointer to the string value passed in.
+func StringAny(v any) *any {
+	return &v
+}
+
+// String returns a pointer to the string value passed in.
+func IntSlice(v []int) *[]int {
+	return &v
+}
+
+// String returns a pointer to the string value passed in.
+func IntMap(v map[string]int) *map[string]int {
+	return &v
+}
+
+// String returns a pointer to the string value passed in.
+func IntChan(v chan int) *chan int {
+	return &v
+}
+
+// String returns a pointer to the string value passed in.
+func IntInterface(v interface{}) *interface{} {
+	return &v
+}
