@@ -258,12 +258,45 @@ func ReflectValue(fields map[string]any, i any) map[string]any {
 
 func ReflectReference(data map[string]any) map[string]any {
 	for key, item := range data {
-		v := reflect.ValueOf(item)
-		if v.Kind() == reflect.Ptr && !v.IsNil() {
-			data[key] = v.Elem().Interface()
-		}
+		data[key] = dereference(item)
 	}
 	return data
+}
+
+func dereference(item any) any {
+	if item == nil {
+		return nil
+	}
+	v := reflect.ValueOf(item)
+	// Unwrap pointers (handle multiple levels of indirection)
+	for v.Kind() == reflect.Ptr {
+		if v.IsNil() {
+			return nil
+		}
+		v = v.Elem()
+	}
+	switch v.Kind() {
+	case reflect.Map:
+		// Recurse into map[string]any
+		if m, ok := v.Interface().(map[string]any); ok {
+			for k, val := range m {
+				m[k] = dereference(val)
+			}
+			return m
+		}
+		return v.Interface()
+	case reflect.Slice, reflect.Array:
+		// Recurse into []any
+		if s, ok := v.Interface().([]any); ok {
+			for i, val := range s {
+				s[i] = dereference(val)
+			}
+			return s
+		}
+		return v.Interface()
+	default:
+		return v.Interface()
+	}
 }
 
 func QueryParams() {
