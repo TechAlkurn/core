@@ -1,9 +1,8 @@
-package action
+package actionrequest
 
 import (
 	"fmt"
 	"net/http"
-	"net/url"
 )
 
 type Context struct {
@@ -35,13 +34,13 @@ func Request(query string) *Context {
 	return req
 }
 
-// Build *http.Request from raw query string
+// Build *http.Request from raw query string.
+// An empty target URL always parses successfully, so httpReq (and its URL) is
+// never nil. The raw query is assigned verbatim — parsing then re-encoding would
+// reorder the params and silently drop the whole query on a parse error.
 func (r *Context) PgRequest() *http.Request {
-	httpReq, _ := http.NewRequest("GET", "", nil)
-
-	parsedQuery, _ := url.ParseQuery(r.Uri)
-	httpReq.URL.RawQuery = parsedQuery.Encode()
-
+	httpReq, _ := http.NewRequest(http.MethodGet, "", nil)
+	httpReq.URL.RawQuery = r.Uri
 	r.Request = httpReq
 	return httpReq
 }
@@ -59,22 +58,25 @@ func (r *Context) SetQueryParam(param string, value any) {
 	q := r.Request.URL.Query()
 	q.Set(param, toString(value))
 
-	r.Request.URL.RawQuery = q.Encode()
-	r.Uri = q.Encode()
+	encoded := q.Encode()
+	r.Request.URL.RawQuery = encoded
+	r.Uri = encoded
 }
 
 func (r *Context) SetQueryParams(params map[string]any) {
 	for key, value := range params {
 		r.SetQueryParam(key, value)
 	}
+	r.Uri = r.ToQueryString()
 }
 
 func (r *Context) DeleteQueryParam(param string) {
 	q := r.Request.URL.Query()
 	q.Del(param)
 
-	r.Request.URL.RawQuery = q.Encode()
-	r.Uri = q.Encode()
+	encoded := q.Encode()
+	r.Request.URL.RawQuery = encoded
+	r.Uri = encoded
 }
 
 func (r *Context) ToQueryString() string {
