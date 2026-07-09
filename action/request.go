@@ -1,4 +1,4 @@
-package actionrequest
+package action
 
 import (
 	"fmt"
