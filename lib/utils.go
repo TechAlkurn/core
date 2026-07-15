@@ -47,6 +47,11 @@ func ToMarshal(r any) (j []byte) {
 	return
 }
 
+func ToBytes(r any) (j []byte) {
+	j, _ = json.Marshal(r)
+	return
+}
+
 func ToMapped(data []byte) (obj map[string]any) {
 	ToUnmarshal(data, &obj)
 	return
