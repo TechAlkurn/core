@@ -2,8 +2,10 @@ package lib
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
+	"maps"
 	"regexp"
 	"strconv"
 
@@ -90,30 +92,24 @@ func BindJSON(c *gin.Context) (form map[string]any, err error) {
 	return nil, nil
 }
 
-func ShouldBindJSON(c *gin.Context, args ...map[string]any) (j []byte) {
+func ShouldBindJSON(c *gin.Context, args ...map[string]any) (j []byte, err error) {
 	if !InArray(c.Request.Method, []string{"POST", "PUT", "PATCH"}) {
 		return nil
 	}
 	var request map[string]any
 	if err := c.ShouldBindJSON(&request); err != nil {
-		return nil
+		return nil, err
 	}
 	form, ok := request["form"].(map[string]any)
 	if !ok {
-		return nil
+		return nil, errors.New("invalid form data")
 	}
 	// Merge additional arguments into the "form" map
 	for _, arg := range args {
-		for key, value := range arg {
-			form[key] = value
-		}
+		maps.Copy(form, arg)
 	}
 	// Marshal the modified "form" map into JSON
-	data, err := json.Marshal(form)
-	if err != nil {
-		return nil
-	}
-	return data
+	return json.Marshal(form)
 }
 
 // String returns a pointer to the string value passed in.
