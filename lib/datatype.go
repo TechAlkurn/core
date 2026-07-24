@@ -94,7 +94,7 @@ func BindJSON(c *gin.Context) (form map[string]any, err error) {
 
 func ShouldBindJSON(c *gin.Context, args ...map[string]any) (j []byte, err error) {
 	if !InArray(c.Request.Method, []string{"POST", "PUT", "PATCH"}) {
-		return nil
+		return nil, errors.New("invalid request method")
 	}
 	var request map[string]any
 	if err := c.ShouldBindJSON(&request); err != nil {
