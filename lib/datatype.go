@@ -25,6 +25,36 @@ func ToString(v interface{}) string {
 	}
 }
 
+func ToUint8(s any) uint8 {
+	str := fmt.Sprintf("%v", s)
+	num, _ := strconv.ParseUint(str, 10, 8)
+	return uint8(num)
+}
+
+func ToUint16(s any) uint16 {
+	str := fmt.Sprintf("%v", s)
+	num, _ := strconv.ParseUint(str, 10, 16)
+	return uint16(num)
+}
+
+func ToInt8(s any) int8 {
+	str := fmt.Sprintf("%v", s)
+	num, _ := strconv.ParseInt(str, 10, 8)
+	return int8(num)
+}
+
+func ToInt16(s any) int16 {
+	str := fmt.Sprintf("%v", s)
+	num, _ := strconv.ParseInt(str, 10, 16)
+	return int16(num)
+}
+
+func ToFloat32(s any) float32 {
+	str := fmt.Sprintf("%v", s)
+	num, _ := strconv.ParseFloat(str, 32)
+	return float32(num)
+}
+
 func ToUint32(s any) uint32 {
 	str := fmt.Sprintf("%v", s)
 	num, _ := strconv.ParseUint(str, 10, 32)
