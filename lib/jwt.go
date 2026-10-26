@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/golang-jwt/jwt"
+	"github.com/golang-jwt/jwt/v5"
 )
 
 var (
@@ -133,16 +133,16 @@ func TokenFromRequest(bearerToken string) (token string) {
 
 type jwtClaim struct {
 	LoggedId uint32 `json:"logged_id"`
-	jwt.StandardClaims
+	jwt.RegisteredClaims
 }
 
 func JwtGenerate(userId uint32) string {
 	claims := &jwtClaim{
 		userId,
-		jwt.StandardClaims{
-			ExpiresAt: time.Now().Add(time.Hour * 24 * 365 * 5).Unix(),
+		jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour * 24 * 365 * 5)),
 			Issuer:    os.Getenv("SITE_NAME"),
-			IssuedAt:  time.Now().Unix(),
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
 		},
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)

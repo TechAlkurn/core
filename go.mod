@@ -6,11 +6,12 @@ require (
 	github.com/dimk00z/grpc-filetransfer v0.0.0-20221226064108-b8af13103e53
 	github.com/disintegration/imaging v1.6.2
 	github.com/gin-gonic/gin v1.10.0
-	github.com/golang-jwt/jwt v3.2.2+incompatible
+	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/gosimple/unidecode v1.0.1
 	github.com/sirupsen/logrus v1.9.3
 	go.uber.org/zap v1.27.0
 	golang.org/x/crypto v0.28.0
+	golang.org/x/net v0.30.0
 	golang.org/x/text v0.19.0
 	google.golang.org/grpc v1.64.0
 )
@@ -40,7 +41,6 @@ require (
 	go.uber.org/multierr v1.10.0 // indirect
 	golang.org/x/arch v0.8.0 // indirect
 	golang.org/x/image v0.0.0-20191009234506-e7c1f5e7dbb8 // indirect
-	golang.org/x/net v0.30.0 // indirect
 	golang.org/x/sys v0.26.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240521202816-d264139d666e // indirect
 	google.golang.org/protobuf v1.34.1 // indirect
