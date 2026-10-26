@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -20,11 +21,10 @@ import (
 	"golang.org/x/crypto/pbkdf2"
 )
 
-/*
-Security Encryption Bytes (key)
-SecurityEncryptionBytes := lib.SecurityEncryptionKey()
-*/
-var SecurityEncryptionBytes = []byte{35, 213, 66, 145, 241, 141, 199, 3, 87, 98, 128, 181, 22, 153, 174, 99, 53, 27, 214, 30, 69, 85, 36, 3, 211, 91, 136, 101, 201, 187, 81, 26}
+// legacyEncryptionKey is the hardcoded key older releases used for AES-CFB.
+// It is only used to decrypt ciphertext produced by those releases; new data
+// is always encrypted with the ENCRYPTION_KEY-derived key.
+var legacyEncryptionKey = []byte{35, 213, 66, 145, 241, 141, 199, 3, 87, 98, 128, 181, 22, 153, 174, 99, 53, 27, 214, 30, 69, 85, 36, 3, 211, 91, 136, 101, 201, 187, 81, 26}
 
 var letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 
@@ -117,68 +117,96 @@ func IsPasswordResetTokenValid(token string) bool {
 	return int64(rawTime)+7200 >= time.Now().Unix()
 }
 
+// SecurityEncryptionKey derives the 32-byte AES key from ENCRYPTION_KEY.
+// The salt is fixed so the same key is derived on every call. Returns nil
+// when ENCRYPTION_KEY is unset.
 func SecurityEncryptionKey() (key []byte) {
-	salt := make([]byte, 16) // Generate a random salt
-	_, err := rand.Read(salt)
-	if err != nil {
-		fmt.Println("Error generating salt:", err)
-		return
+	secret := os.Getenv("ENCRYPTION_KEY")
+	if secret == "" {
+		return nil
 	}
-	key = pbkdf2.Key([]byte(os.Getenv("ENCRYPTION_KEY")), make([]byte, 16), 1000, 32, sha256.New)
-	return
+	return pbkdf2.Key([]byte(secret), make([]byte, 16), 1000, 32, sha256.New)
 }
 
+// SecurityEncrypt returns "v1::" followed by the base64 ciphertext, the format
+// SecurityDecrypt reads. Returns "" if encryption fails.
 func SecurityEncrypt(str string) (value string) {
-	return
+	cipherText, err := Encrypt([]byte(str))
+	if err != nil {
+		return
+	}
+	return "v1::" + base64.StdEncoding.EncodeToString(cipherText)
 }
 
 func SecurityDecrypt(str string) any {
 	if !strings.Contains(str, "::") {
 		return nil
 	}
-	result := strings.Split(str, "::")
-	value, _ := Decrypt([]byte(result[1]))
+	result := strings.SplitN(str, "::", 2)
+	cipherText, err := base64.StdEncoding.DecodeString(result[1])
+	if err != nil {
+		// Older values stored the raw ciphertext bytes.
+		cipherText = []byte(result[1])
+	}
+	value, _ := Decrypt(cipherText)
 	return value
 }
 
-/*
-	key := lib.SecurityEncryptionKey() //(SecurityEncryptionBytes)
-	log.Println(key)
-	EncryptedTextDemo, _ := lib.Encrypt([]byte("Hello, World!"))
-	log.Println(string(EncryptedTextDemo))
-	DecryptTextDemo, _ := lib.Decrypt(EncryptedTextDemo)
-	log.Println(string(DecryptTextDemo))
-	os.Exit(0)
-*/
-
-// Encrypt method is to encrypt or hide any classified text
+// Encrypt method is to encrypt or hide any classified text.
+// Uses AES-256-GCM with the ENCRYPTION_KEY-derived key; output is nonce||ciphertext.
 func Encrypt(plainText []byte) ([]byte, error) {
-	block, err := aes.NewCipher(SecurityEncryptionBytes)
+	key := SecurityEncryptionKey()
+	if key == nil {
+		return nil, errors.New("ENCRYPTION_KEY is not set")
+	}
+	gcm, err := newGCM(key)
 	if err != nil {
 		return nil, err
 	}
-	cipherText := make([]byte, aes.BlockSize+len(plainText))
-	iv := cipherText[:aes.BlockSize]
-	if _, err := io.ReadFull(rand.Reader, iv); err != nil {
+	nonce := make([]byte, gcm.NonceSize())
+	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
 		return nil, err
 	}
-	stream := cipher.NewCFBEncrypter(block, iv)
-	stream.XORKeyStream(cipherText[aes.BlockSize:], plainText)
-	return cipherText, nil
+	return gcm.Seal(nonce, nonce, plainText, nil), nil
 }
 
-// Decrypt method is to extract back the encrypted text
+// Decrypt method is to extract back the encrypted text.
+// Ciphertext that fails GCM authentication is retried as legacy AES-CFB
+// with the old hardcoded key.
 func Decrypt(cipherText []byte) ([]byte, error) {
-	block, err := aes.NewCipher(SecurityEncryptionBytes)
+	if key := SecurityEncryptionKey(); key != nil {
+		gcm, err := newGCM(key)
+		if err != nil {
+			return nil, err
+		}
+		if len(cipherText) >= gcm.NonceSize() {
+			nonce, sealed := cipherText[:gcm.NonceSize()], cipherText[gcm.NonceSize():]
+			if plainText, err := gcm.Open(nil, nonce, sealed, nil); err == nil {
+				return plainText, nil
+			}
+		}
+	}
+	return decryptLegacy(cipherText)
+}
+
+func newGCM(key []byte) (cipher.AEAD, error) {
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, err
+	}
+	return cipher.NewGCM(block)
+}
+
+func decryptLegacy(cipherText []byte) ([]byte, error) {
+	block, err := aes.NewCipher(legacyEncryptionKey)
 	if err != nil {
 		return nil, err
 	}
 	if len(cipherText) < aes.BlockSize {
 		return nil, fmt.Errorf("text too short")
 	}
-	iv := cipherText[:aes.BlockSize]
-	cipherText = cipherText[aes.BlockSize:]
-	stream := cipher.NewCFBDecrypter(block, iv)
-	stream.XORKeyStream(cipherText, cipherText)
-	return cipherText, nil
+	plainText := make([]byte, len(cipherText)-aes.BlockSize)
+	stream := cipher.NewCFBDecrypter(block, cipherText[:aes.BlockSize])
+	stream.XORKeyStream(plainText, cipherText[aes.BlockSize:])
+	return plainText, nil
 }

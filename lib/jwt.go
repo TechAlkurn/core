@@ -13,18 +13,41 @@ import (
 )
 
 var (
-	mu         sync.Mutex
-	muStorage  = make(map[string]any)
-	privateKey = []byte(os.Getenv("SECRET_KEY"))
+	mu        sync.Mutex
+	muStorage = make(map[string]any)
 )
 
+// SECRET_KEY is read on every call rather than at package init, so a .env
+// loaded in main() is picked up.
+func secretKey() ([]byte, error) {
+	key := []byte(os.Getenv("SECRET_KEY"))
+	if len(key) == 0 {
+		return nil, errors.New("private key is empty")
+	}
+	return key, nil
+}
+
+// claimUserID reads the user id, falling back to the "logged_id" claim
+// written by older JwtGenerate tokens.
+func claimUserID(claims jwt.MapClaims) (any, bool) {
+	if item, ok := claims["id"]; ok {
+		return item, true
+	}
+	item, ok := claims["logged_id"]
+	return item, ok
+}
+
 func getToken(bearerToken string) (*jwt.Token, error) {
+	key, err := secretKey()
+	if err != nil {
+		return nil, err
+	}
 	strToken := TokenFromRequest(bearerToken)
 	token, err := jwt.Parse(strToken, func(token *jwt.Token) (any, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
-		return privateKey, nil
+		return key, nil
 	})
 	if err != nil {
 		return nil, fmt.Errorf("error parsing token: %v", err)
@@ -39,7 +62,7 @@ func ValidateJWT(str string) error {
 	}
 	claims, ok := token.Claims.(jwt.MapClaims)
 	if ok && token.Valid {
-		if item, ok := claims["id"]; ok {
+		if item, ok := claimUserID(claims); ok {
 			SetMuStorage("id", item)
 		}
 		return nil
@@ -53,7 +76,7 @@ func LoggedUser(str string) (uint32, error) {
 	}
 	token, _ := getToken(str)
 	claims, _ := token.Claims.(jwt.MapClaims)
-	if item, ok := claims["id"]; ok {
+	if item, ok := claimUserID(claims); ok {
 		return ToUint32(item), nil
 	}
 	return 0, nil
@@ -132,7 +155,7 @@ func TokenFromRequest(bearerToken string) (token string) {
 }
 
 type jwtClaim struct {
-	LoggedId uint32 `json:"logged_id"`
+	LoggedId uint32 `json:"id"`
 	jwt.RegisteredClaims
 }
 
@@ -155,19 +178,23 @@ func JwtGenerate(userId uint32) string {
 }
 
 func GenerateJWT(userId uint32) (string, error) {
-	privateKey := []byte(os.Getenv("SECRET_KEY"))
-	if len(privateKey) == 0 {
-		return "", errors.New("private key is empty")
+	privateKey, err := secretKey()
+	if err != nil {
+		return "", err
 	}
 	tokenTTL, _ := strconv.Atoi(os.Getenv("TOKEN_TTL"))
 	sapi := os.Getenv("API_ENDPOINT")
+	now := time.Now()
 	claimsParams := jwt.MapClaims{
 		"id":  userId,
 		"iss": sapi,
 		"aud": sapi,
-		"iat": time.Now().Unix(),
-		"nbf": time.Now().Unix(),
-		"eat": time.Now().Add(time.Second * time.Duration(tokenTTL)).Unix(),
+		"iat": now.Unix(),
+		"nbf": now.Unix(),
+	}
+	// TOKEN_TTL is in seconds; unset or 0 means the token does not expire.
+	if tokenTTL > 0 {
+		claimsParams["exp"] = now.Add(time.Second * time.Duration(tokenTTL)).Unix()
 	}
 	return jwt.NewWithClaims(jwt.SigningMethodHS256, claimsParams).SignedString(privateKey)
 }
