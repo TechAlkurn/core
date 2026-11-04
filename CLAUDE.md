@@ -9,8 +9,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ```bash
-go build ./lib/... ./cache/...   # builds cleanly
-go vet ./lib/... ./cache/...
+go build ./lib/... ./cache/... ./db/...   # builds cleanly
+go vet ./lib/... ./cache/... ./db/...
 go test ./...                    # there are currently no _test.go files
 go test ./lib -run TestName      # single test, once tests exist
 ```
@@ -21,12 +21,16 @@ go test ./lib -run TestName      # single test, once tests exist
 
 ## Architecture
 
-Three packages:
+Four packages:
 
 - **`action/`** — Gin HTTP glue for a gateway that fronts gRPC services.
   - `request.go`: `Context` wraps a raw query string in an `*http.Request` so query params can be read/mutated (`Query`, `SetQueryParam`, `IgnoreNotification` checks `is_ignore`). `RawQuery` is assigned verbatim on purpose to preserve param order.
   - `response.go`: `Gin.Response(*gen.Response)` turns a gRPC response into the standard JSON envelope `BaseResponse{status, message, token, data}`. The proto `Data` field is JSON bytes; top-level `token` and `message` keys are lifted out of `data` into the envelope. Empty data becomes `[]`. `Abort`/`Failed` strip the gRPC `"desc = "` prefix from error messages. Includes `SafeResponseMiddleware` guarding against double writes.
 - **`cache/`** — in-memory key/value stores. `NewMutexCache` and `NewRWMutexCache` share Get/Set/Delete/Has/Keys/Values/Len/Range/Flush; the RWMutex one adds `GetDefault`, `GetOrSet*` variants, etc. Constructors return unexported types.
+- **`db/`** — GORM data layer, free of any host-app import. `db.SetConnection(*gorm.DB)` / `db.SetLogger(Logger)` must be called at host startup; `db.Connection()` panics otherwise.
+  - `activerecord/`: generic `ActiveRecord[T]` (FindOne/FindAll/Count/SaveDB/DataQuery…), `DateTime`, `Transaction`/`InTx`. `DataQuery` takes a `QueryReader` interface (satisfied by `*action.Context`) so this package does not import `action`.
+  - `hooks/`: per-model before/after save/update hook registry.
+  - `drivers/`: MySQL connection (`NewMysql` reads `DB_NAME`, `DB_URL`) and schema introspection.
 - **`lib/`** — PHP-style helper functions (`InArray`, `Explode`, `Implode`, `Strtotime`, `Empty`, `Slugify`, `ToUint32`/`ToString` loose type conversions, etc.). Notable pieces:
   - `jwt.go` (golang-jwt **v5**): HS256 tokens. `ValidateJWT`/`LoggedUser` read the `id` claim and stash it in a **package-global** mutex map (`SetMuStorage`/`GetLoggedId`/`IsOwner`) — this is process-wide state, not per-request. Two generators both write the `id` claim: `GenerateJWT` (`exp` from `TOKEN_TTL` seconds; no expiry if unset/0) and `JwtGenerate` (5-year `exp`). For old tokens, the validator falls back to the legacy `logged_id` claim.
   - `security.go`: bcrypt passwords, generic `GenerateToken`/`ValidateToken`, and `Encrypt`/`Decrypt`, which use AES-256-GCM (`nonce||ciphertext`) with a key derived from `ENCRYPTION_KEY`. `Encrypt` errors if that variable is unset. `Decrypt` falls back to the old AES-CFB format with a key written in the code (`legacyEncryptionKey`) so existing data still decrypts; never encrypt with that key. `SecurityEncrypt` produces `v1::<base64>`, and `SecurityDecrypt` reads it (and the old raw-bytes form).
