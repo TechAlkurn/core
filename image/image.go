@@ -51,6 +51,7 @@ func Thumb(file string, width int, height int) string {
 		// log.Fatal(err)
 		return org_image_thumb
 	}
+
 	// Fit scales the image down to fit within width x height, preserving
 	// aspect ratio. No cropping — the full image is always visible.
 	thumbnail := imaging.Fit(img, width, height, imaging.CatmullRom)
