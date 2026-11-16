@@ -77,7 +77,6 @@ func (g *Gin) Response(raw *gen.Response) {
 		g.C.JSON(http.StatusOK, response)
 		return
 	}
-
 	// Convert Protobuf Struct to Go map
 	if len(rawData) > 0 {
 		var parsedData any
