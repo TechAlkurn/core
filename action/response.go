@@ -1,13 +1,12 @@
 package action
 
 import (
+	"app/pkg/protos/gen"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
 	"sync"
-
-	"app/pkg/protos/gen"
 
 	"github.com/TechAlkurn/core/lib"
 	"github.com/gin-gonic/gin"
