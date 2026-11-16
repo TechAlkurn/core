@@ -28,7 +28,10 @@ type (
 	}
 )
 
-const SITE_MODE_STAGING = "staging"
+const (
+	SITE_MODE_STAGING    = "staging"
+	SITE_MODE_PRODUCTION = "production"
+)
 
 var (
 	modelRegistry   = map[string]ModelFactory{}
@@ -37,7 +40,8 @@ var (
 	fieldTypeCache  sync.Map // map[reflect.Type]map[string]reflect.Type — field types per type
 	tableNameCache  sync.Map // map[reflect.Type]string — resolved table name per type
 	isDebugAtomic   atomic.Bool
-	isDebugResolved atomic.Bool // false = never resolved; on first call we hit the DB
+	isDebugResolved atomic.Bool  // false = never resolved; on first call we hit the DB
+	debugScopes     atomic.Int32 // open Debug() scopes; > 0 forces IsDebug() true
 	reqCache        sync.Map
 )
 
@@ -67,6 +71,9 @@ func ActiveModel(name string) (any, bool) {
 // Replaces the old implementation that hit config.Lcache on every call and
 // occasionally re-queried core_config_value on cache expiry.
 var IsDebug = func() bool {
+	if debugScopes.Load() > 0 {
+		return true
+	}
 	if isDebugResolved.Load() {
 		return isDebugAtomic.Load()
 	}
@@ -76,6 +83,28 @@ var IsDebug = func() bool {
 	isDebugAtomic.Store(debug)
 	isDebugResolved.Store(true)
 	return debug
+}
+
+// Debug turns SQL debug logging on until the returned func is called. Use it
+// with defer — note the trailing () so the end func runs on return:
+//
+//	defer activerecord.Debug("UserCatalog: default search")()
+//
+// Scopes are reference-counted rather than save/restore of the flag, so
+// overlapping calls (concurrent requests, nested Debug) can't clobber each
+// other: logging stays on while any scope is open and drops back to the
+// site_mode / SetIsDebug baseline once the last one ends. Calling the
+// returned func more than once is a no-op.
+//
+// The flag is process-global: while a scope is open, queries from every
+// goroutine are logged, not just the caller's.
+var Debug = func(msg ...any) func() {
+	if len(msg) > 0 {
+		fmt.Println(msg...)
+	}
+	debugScopes.Add(1)
+	var once sync.Once
+	return func() { once.Do(func() { debugScopes.Add(-1) }) }
 }
 
 // SetIsDebug forces debug/staging DB logging on or off, overriding the
