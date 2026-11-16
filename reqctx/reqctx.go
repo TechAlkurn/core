@@ -14,6 +14,7 @@
 //
 // The goroutine-bound store is a temporary bridge until identity is passed
 // explicitly. It does NOT cross `go func()` boundaries — use Go to propagate.
+
 package reqctx
 
 import (
