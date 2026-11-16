@@ -70,6 +70,7 @@ func (g *Gin) Response(raw *gen.Response) {
 		Log.Warn("Invalid status code received", zap.Int32("proto_status", status), zap.String("path", g.C.FullPath()))
 	}
 	g.C.Header("Content-Type", "application/json")
+
 	// Safely handle empty responses
 	rawData := raw.Data
 	if lib.IsNil(rawData) {
@@ -77,6 +78,7 @@ func (g *Gin) Response(raw *gen.Response) {
 		g.C.JSON(http.StatusOK, response)
 		return
 	}
+
 	// Convert Protobuf Struct to Go map
 	if len(rawData) > 0 {
 		var parsedData any
