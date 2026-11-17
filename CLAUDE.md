@@ -17,7 +17,7 @@ go test ./lib -run TestName      # single test, once tests exist
 
 `go build ./...` **fails by design** in this repo: `action/response.go` imports `app/pkg/protos/gen`, a package that only exists in the consuming application's module (it provides the gRPC `gen.Response` type with `GetStatus()` / `Data []byte`). The `action` package therefore only compiles inside a host app. Don't "fix" this by removing the import without being asked.
 
-`make up m="commit message"` runs `git add . && git commit && git push origin main` — it pushes directly to the remote. Don't run it unless the user asks.
+`make up m="commit message"` runs `git add . && git commit && git push origin main` — it pushes directly to the remote. Don't run it unless the user asks. After the push it runs `make publish`, which asks `proxy.golang.org` for the exact HEAD commit and prints `go get github.com/TechAlkurn/core@<hash> && go mod tidy` for consuming apps. Tell users to pin that hash, not `@latest`: the proxy caches `@latest`, so right after a push it can resolve an older commit and fail with "module ... found, but does not contain package ...".
 
 ## Architecture
 
