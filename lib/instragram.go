@@ -7,14 +7,10 @@ import (
 	"mime/multipart"
 	"net/http"
 
-	"github.com/TechAlkurn/core/action"
 	"github.com/TechAlkurn/core/cons"
 )
 
-func InstagramToken(query string) (data []byte, error error) {
-	req := action.Request(query)
-	code := req.Query("code")
-	redirect_uri := req.Query("redirect_uri")
+func InstagramToken(code, redirect_uri string) (data []byte, error error) {
 	if code == "" {
 		return nil, errors.New(cons.AuthorizationCodeRequired)
 	}
