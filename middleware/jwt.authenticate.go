@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"strings"
 
-	"app/pkg/core/config"
+	"github.com/TechAlkurn/core/config"
 
 	"github.com/TechAlkurn/core/cons"
 

@@ -1,0 +1,310 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "contact": {}
+  },
+  "paths": {
+    "/auth": {
+      "get": {
+        "description": "Returns a success message",
+        "consumes": ["application/json"],
+        "produces": ["application/json"],
+        "tags": ["Auth"],
+        "summary": "Default method for auth controller",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/gen.Response"
+            }
+          }
+        }
+      }
+    },
+    "/email-reactivation": {
+      "post": {
+        "description": "Verifies an auth token",
+        "consumes": ["application/json"],
+        "produces": ["application/json"],
+        "tags": ["Auth"],
+        "summary": "Auth verification method",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/gen.Response"
+            }
+          }
+        }
+      }
+    },
+    "/forgot-password": {
+      "post": {
+        "description": "Sends a forgot password request for a user",
+        "consumes": ["application/json"],
+        "produces": ["application/json"],
+        "tags": ["Auth"],
+        "summary": "User forgot password method",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/gen.Response"
+            }
+          }
+        }
+      }
+    },
+    "/is-email-exists": {
+      "post": {
+        "description": "Checks if an email exists in the system",
+        "consumes": ["application/json"],
+        "produces": ["application/json"],
+        "tags": ["Auth"],
+        "summary": "Check if email exists",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/gen.Response"
+            }
+          }
+        }
+      }
+    },
+    "/is-password-token-exists": {
+      "post": {
+        "description": "Checks if a password token exists in the system",
+        "consumes": ["application/json"],
+        "produces": ["application/json"],
+        "tags": ["Auth"],
+        "summary": "Check if password token exists",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/gen.Response"
+            }
+          }
+        }
+      }
+    },
+    "/is-user-email-exists": {
+      "post": {
+        "description": "Checks if a user's email exists in the system",
+        "consumes": ["application/json"],
+        "produces": ["application/json"],
+        "tags": ["Auth"],
+        "summary": "Check if user email exists",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/gen.Response"
+            }
+          }
+        }
+      }
+    },
+    "/login": {
+      "post": {
+        "description": "Logs in a user",
+        "consumes": ["application/json"],
+        "produces": ["application/json"],
+        "tags": ["Auth"],
+        "summary": "User login method",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/gen.Response"
+            }
+          }
+        }
+      }
+    },
+    "/otpLogin": {
+      "post": {
+        "description": "Logs in a user using OTP",
+        "consumes": ["application/json"],
+        "produces": ["application/json"],
+        "tags": ["Auth"],
+        "summary": "OTP login method",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/gen.Response"
+            }
+          }
+        }
+      }
+    },
+    "/otpRequest": {
+      "post": {
+        "description": "Sends an OTP request",
+        "consumes": ["application/json"],
+        "produces": ["application/json"],
+        "tags": ["Auth"],
+        "summary": "OTP request method",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/gen.Response"
+            }
+          }
+        }
+      }
+    },
+    "/otpVerification": {
+      "post": {
+        "description": "Verifies an OTP",
+        "consumes": ["application/json"],
+        "produces": ["application/json"],
+        "tags": ["Auth"],
+        "summary": "OTP verification method",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/gen.Response"
+            }
+          }
+        }
+      }
+    },
+    "/reactivation": {
+      "post": {
+        "description": "Reactivates a user's account",
+        "consumes": ["application/json"],
+        "produces": ["application/json"],
+        "tags": ["Auth"],
+        "summary": "Account reactivation method",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/gen.Response"
+            }
+          }
+        }
+      }
+    },
+    "/register": {
+      "post": {
+        "description": "Registers a new user",
+        "consumes": ["application/json"],
+        "produces": ["application/json"],
+        "tags": ["Auth"],
+        "summary": "User registration method",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/gen.Response"
+            }
+          }
+        }
+      }
+    },
+    "/resend2FactorAuth": {
+      "post": {
+        "description": "Resends a 2FA request",
+        "consumes": ["application/json"],
+        "produces": ["application/json"],
+        "tags": ["Auth"],
+        "summary": "Resend 2FA method",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/gen.Response"
+            }
+          }
+        }
+      }
+    },
+    "/resendVerification": {
+      "post": {
+        "description": "Resends a verification request",
+        "consumes": ["application/json"],
+        "produces": ["application/json"],
+        "tags": ["Auth"],
+        "summary": "Resend verification method",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/gen.Response"
+            }
+          }
+        }
+      }
+    },
+    "/reset-password": {
+      "post": {
+        "description": "Resets a user's password",
+        "consumes": ["application/json"],
+        "produces": ["application/json"],
+        "tags": ["Auth"],
+        "summary": "User reset password method",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/gen.Response"
+            }
+          }
+        }
+      }
+    },
+    "/verify2FactorAuth": {
+      "post": {
+        "description": "Verifies a 2FA request",
+        "consumes": ["application/json"],
+        "produces": ["application/json"],
+        "tags": ["Auth"],
+        "summary": "2FA verification method",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/gen.Response"
+            }
+          }
+        }
+      }
+    },
+    "/verifyAccount": {
+      "post": {
+        "description": "Verifies a user's account",
+        "consumes": ["application/json"],
+        "produces": ["application/json"],
+        "tags": ["Auth"],
+        "summary": "Account verification method",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/gen.Response"
+            }
+          }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "gen.Response": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          }
+        }
+      }
+    }
+  }
+}

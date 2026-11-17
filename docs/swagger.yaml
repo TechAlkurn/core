@@ -1,0 +1,267 @@
+definitions:
+  gen.Response:
+    properties:
+      data:
+        items:
+          type: integer
+        type: array
+    type: object
+info:
+  contact: {}
+paths:
+  /auth:
+    get:
+      consumes:
+        - application/json
+      description: Returns a success message
+      produces:
+        - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: "#/definitions/gen.Response"
+      summary: Default method for auth controller
+      tags:
+        - Auth
+  /email-reactivation:
+    post:
+      consumes:
+        - application/json
+      description: Verifies an auth token
+      produces:
+        - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: "#/definitions/gen.Response"
+      summary: Auth verification method
+      tags:
+        - Auth
+  /forgot-password:
+    post:
+      consumes:
+        - application/json
+      description: Sends a forgot password request for a user
+      produces:
+        - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: "#/definitions/gen.Response"
+      summary: User forgot password method
+      tags:
+        - Auth
+  /is-email-exists:
+    post:
+      consumes:
+        - application/json
+      description: Checks if an email exists in the system
+      produces:
+        - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: "#/definitions/gen.Response"
+      summary: Check if email exists
+      tags:
+        - Auth
+  /is-password-token-exists:
+    post:
+      consumes:
+        - application/json
+      description: Checks if a password token exists in the system
+      produces:
+        - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: "#/definitions/gen.Response"
+      summary: Check if password token exists
+      tags:
+        - Auth
+  /is-user-email-exists:
+    post:
+      consumes:
+        - application/json
+      description: Checks if a user's email exists in the system
+      produces:
+        - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: "#/definitions/gen.Response"
+      summary: Check if user email exists
+      tags:
+        - Auth
+  /login:
+    post:
+      consumes:
+        - application/json
+      description: Logs in a user
+      produces:
+        - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: "#/definitions/gen.Response"
+      summary: User login method
+      tags:
+        - Auth
+  /otpLogin:
+    post:
+      consumes:
+        - application/json
+      description: Logs in a user using OTP
+      produces:
+        - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: "#/definitions/gen.Response"
+      summary: OTP login method
+      tags:
+        - Auth
+  /otpRequest:
+    post:
+      consumes:
+        - application/json
+      description: Sends an OTP request
+      produces:
+        - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: "#/definitions/gen.Response"
+      summary: OTP request method
+      tags:
+        - Auth
+  /otpVerification:
+    post:
+      consumes:
+        - application/json
+      description: Verifies an OTP
+      produces:
+        - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: "#/definitions/gen.Response"
+      summary: OTP verification method
+      tags:
+        - Auth
+  /reactivation:
+    post:
+      consumes:
+        - application/json
+      description: Reactivates a user's account
+      produces:
+        - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: "#/definitions/gen.Response"
+      summary: Account reactivation method
+      tags:
+        - Auth
+  /register:
+    post:
+      consumes:
+        - application/json
+      description: Registers a new user
+      produces:
+        - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: "#/definitions/gen.Response"
+      summary: User registration method
+      tags:
+        - Auth
+  /resend2FactorAuth:
+    post:
+      consumes:
+        - application/json
+      description: Resends a 2FA request
+      produces:
+        - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: "#/definitions/gen.Response"
+      summary: Resend 2FA method
+      tags:
+        - Auth
+  /resendVerification:
+    post:
+      consumes:
+        - application/json
+      description: Resends a verification request
+      produces:
+        - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: "#/definitions/gen.Response"
+      summary: Resend verification method
+      tags:
+        - Auth
+  /reset-password:
+    post:
+      consumes:
+        - application/json
+      description: Resets a user's password
+      produces:
+        - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: "#/definitions/gen.Response"
+      summary: User reset password method
+      tags:
+        - Auth
+  /verify2FactorAuth:
+    post:
+      consumes:
+        - application/json
+      description: Verifies a 2FA request
+      produces:
+        - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: "#/definitions/gen.Response"
+      summary: 2FA verification method
+      tags:
+        - Auth
+  /verifyAccount:
+    post:
+      consumes:
+        - application/json
+      description: Verifies a user's account
+      produces:
+        - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: "#/definitions/gen.Response"
+      summary: Account verification method
+      tags:
+        - Auth
+swagger: "2.0"
