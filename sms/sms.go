@@ -46,7 +46,6 @@ https://docs.unifonic.com/docs/sms-getting-started
 func UnifonicSendSms(to string, message string) error {
 	sid := config.GetString("unifonic_account_sid")
 	sender_id := config.GetString("unifonic_sender_id")
-
 	client := &http.Client{}
 	str := fmt.Sprintf("AppSid=%s&SenderID=%s&Body=%s&Recipient=%s&responseType=JSON&CorrelationID=CorrelationID&baseEncode=true&statusCallback=sent&async=false", sid, sender_id, message, to)
 	data := strings.NewReader(str)
