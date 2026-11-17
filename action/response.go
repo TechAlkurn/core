@@ -1,7 +1,6 @@
 package action
 
 import (
-	"app/pkg/protos/gen"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -31,10 +30,28 @@ type BaseResponse struct {
 	Data    any    `json:"data"`
 }
 
-// Response setting gin.JSON: Pending:-> work on Response
-func (g *Gin) Response(raw *gen.Response) {
+// ProtoResponse is the gRPC response shape rendered by Gin.Response.
+// The protoc-generated *gen.Response (message Response { int32 status;
+// string message; string token; bytes data; }) satisfies it through its
+// generated getters, so host apps pass it in directly without this
+// library importing the host's generated package.
+type ProtoResponse interface {
+	GetStatus() int32
+	GetMessage() string
+	GetToken() string
+	GetData() []byte
+}
+
+// Response converts a gRPC response into the standard JSON envelope.
+func (g *Gin) Response(raw ProtoResponse) {
 	if g.C == nil {
 		Log.Error("Nil context in response handler")
+		return
+	}
+
+	if raw == nil {
+		Log.Warn("Nil response received", zap.String("path", g.C.FullPath()))
+		g.safeJSONWrite(BaseResponse{Status: http.StatusOK, Data: []any{}})
 		return
 	}
 
@@ -69,10 +86,13 @@ func (g *Gin) Response(raw *gen.Response) {
 	} else {
 		Log.Warn("Invalid status code received", zap.Int32("proto_status", status), zap.String("path", g.C.FullPath()))
 	}
+	// Explicit proto fields; keys lifted out of data only fill them when empty.
+	response.Message = raw.GetMessage()
+	response.Token = raw.GetToken()
 	g.C.Header("Content-Type", "application/json")
 
 	// Safely handle empty responses
-	rawData := raw.Data
+	rawData := raw.GetData()
 	if lib.IsNil(rawData) {
 		response.Data = []any{} // Set empty array instead of object
 		g.C.JSON(http.StatusOK, response)
@@ -92,11 +112,15 @@ func (g *Gin) Response(raw *gen.Response) {
 			if m, ok := parsedData.(map[string]any); ok {
 				// Extract special fields
 				if token, exists := m["token"].(string); exists {
-					response.Token = token
+					if response.Token == "" {
+						response.Token = token
+					}
 					delete(m, "token")
 				}
 				if msg, exists := m["message"].(string); exists {
-					response.Message = msg
+					if response.Message == "" {
+						response.Message = msg
+					}
 					delete(m, "message")
 				}
 				response.Data = m

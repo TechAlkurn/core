@@ -9,13 +9,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ```bash
-go build ./lib/... ./cache/... ./db/...   # builds cleanly
-go vet ./lib/... ./cache/... ./db/...
+go build ./...                   # builds cleanly
+go vet ./...
 go test ./...                    # there are currently no _test.go files
 go test ./lib -run TestName      # single test, once tests exist
 ```
 
-`go build ./...` **fails by design** in this repo: `action/response.go` imports `app/pkg/protos/gen`, a package that only exists in the consuming application's module (it provides the gRPC `gen.Response` type with `GetStatus()` / `Data []byte`). The `action` package therefore only compiles inside a host app. Don't "fix" this by removing the import without being asked.
+`action` does not import the host app's generated protos. `Gin.Response` takes the `action.ProtoResponse` interface (`GetStatus/GetMessage/GetToken/GetData`), which the host's protoc-generated `*gen.Response` satisfies, so host apps pass it in directly. Don't add an import of any host-app package here.
 
 `make up m="commit message"` runs `git add . && git commit && git push origin main` — it pushes directly to the remote. Don't run it unless the user asks. After the push it runs `make publish`, which asks `proxy.golang.org` for the exact HEAD commit and prints `go get github.com/TechAlkurn/core@<hash> && go mod tidy` for consuming apps. Tell users to pin that hash, not `@latest`: the proxy caches `@latest`, so right after a push it can resolve an older commit and fail with "module ... found, but does not contain package ...".
 
@@ -25,7 +25,7 @@ Four packages:
 
 - **`action/`** — Gin HTTP glue for a gateway that fronts gRPC services.
   - `request.go`: `Context` wraps a raw query string in an `*http.Request` so query params can be read/mutated (`Query`, `SetQueryParam`, `IgnoreNotification` checks `is_ignore`). `RawQuery` is assigned verbatim on purpose to preserve param order.
-  - `response.go`: `Gin.Response(*gen.Response)` turns a gRPC response into the standard JSON envelope `BaseResponse{status, message, token, data}`. The proto `Data` field is JSON bytes; top-level `token` and `message` keys are lifted out of `data` into the envelope. Empty data becomes `[]`. `Abort`/`Failed` strip the gRPC `"desc = "` prefix from error messages. Includes `SafeResponseMiddleware` guarding against double writes.
+  - `response.go`: `Gin.Response(ProtoResponse)` turns a gRPC response into the standard JSON envelope `BaseResponse{status, message, token, data}`. The proto `Data` field is JSON bytes; top-level `token` and `message` keys are removed from `data` and used for the envelope only when the proto's own `Message`/`Token` fields are empty. Empty data becomes `[]`. `Abort`/`Failed` strip the gRPC `"desc = "` prefix from error messages. Includes `SafeResponseMiddleware` guarding against double writes.
 - **`cache/`** — in-memory key/value stores. `NewMutexCache` and `NewRWMutexCache` share Get/Set/Delete/Has/Keys/Values/Len/Range/Flush; the RWMutex one adds `GetDefault`, `GetOrSet*` variants, etc. Constructors return unexported types.
 - **`db/`** — GORM data layer, free of any host-app import. `db.SetConnection(*gorm.DB)` / `db.SetLogger(Logger)` must be called at host startup; `db.Connection()` panics otherwise.
   - `activerecord/`: generic `ActiveRecord[T]` (FindOne/FindAll/Count/SaveDB/DataQuery…), `DateTime`, `Transaction`/`InTx`. `DataQuery` takes a `QueryReader` interface (satisfied by `*action.Context`) so this package does not import `action`.
