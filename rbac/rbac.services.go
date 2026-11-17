@@ -11,20 +11,32 @@ import (
 	"strconv"
 	"strings"
 
-	"app/pkg/core/cons"
-	"app/pkg/protos/gen"
-
-	"github.com/TechAlkurn/core/rbac/model"
-
-	"github.com/TechAlkurn/core/reqctx"
-
 	"github.com/TechAlkurn/core/action"
+	"github.com/TechAlkurn/core/cons"
 	"github.com/TechAlkurn/core/lib"
+	"github.com/TechAlkurn/core/rbac/model"
+	"github.com/TechAlkurn/core/reqctx"
 	"github.com/gin-gonic/gin"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
-type RbacService interface {
-	Dispatch() (*gen.Response, bool, error)
+// Request is the gRPC request shape Dispatch reads. The host's
+// protoc-generated *gen.Request satisfies it, so this library never
+// imports the host's generated package.
+type Request interface {
+	GetQuery() string
+}
+
+// ResponseMessage is the gRPC response shape (status, message, token,
+// data), satisfied by the host's *gen.Response.
+type ResponseMessage interface {
+	proto.Message
+	action.ProtoResponse
+}
+
+type RbacService[Res ResponseMessage] interface {
+	Dispatch() (Res, bool, error)
 }
 
 // rbacService bundles the request context. We DON'T embed
@@ -33,33 +45,50 @@ type RbacService interface {
 // close an import cycle. The two helpers we'd have inherited
 // (IsAdmin / Response) are trivial and are re-implemented as
 // methods below.
-type rbacService struct {
+type rbacService[Res ResponseMessage] struct {
 	c *action.Context
 }
 
-func NewRbacService(in *gen.Request, params ...map[string]any) RbacService {
-	if in == nil {
-		in = &gen.Request{}
+// NewRbacService builds the dispatcher for the host's generated types:
+//
+//	rbac.NewRbacService[*gen.Response](in).Dispatch()
+//
+// A nil in is treated as an empty query.
+func NewRbacService[Res ResponseMessage](in Request, params ...map[string]any) RbacService[Res] {
+	query := ""
+	if in != nil {
+		query = in.GetQuery()
 	}
-	c := action.Request(in.Query)
+	c := action.Request(query)
 	for _, p := range params {
 		c.SetQueryParams(p)
 	}
-	return &rbacService{c: c}
+	return &rbacService[Res]{c: c}
 }
 
 // IsAdmin mirrors register.GrpcAction.IsAdmin — kept local to avoid
 // importing register (see the type-doc for why).
-func (srv *rbacService) IsAdmin() bool { return reqctx.UserID() == cons.ADMIN_ID }
+func (srv *rbacService[Res]) IsAdmin() bool { return reqctx.UserID() == cons.ADMIN_ID }
 
 // Response builds the gen.Response envelope the rest of the codebase
-// uses. Mirrors register.GrpcAction.Response so callers get the same
-// shape they'd get from any coreService method.
-func (srv *rbacService) Response(data any) (*gen.Response, error) {
-	res := &gen.Response{Status: http.StatusOK, Message: "success"}
+// uses. Mirrors register.GrpcAction.Response (fields set through protoreflect
+// by proto name) so callers get the same shape as any coreService method.
+func (srv *rbacService[Res]) Response(data any) (Res, error) {
+	var zero Res
+	res := zero.ProtoReflect().Type().New().Interface().(Res)
+	r := res.ProtoReflect()
+	fields := r.Descriptor().Fields()
+	if fd := fields.ByName("status"); fd != nil && fd.Kind() == protoreflect.Int32Kind {
+		r.Set(fd, protoreflect.ValueOfInt32(http.StatusOK))
+	}
+	if fd := fields.ByName("message"); fd != nil && fd.Kind() == protoreflect.StringKind {
+		r.Set(fd, protoreflect.ValueOfString("success"))
+	}
 	if !lib.IsEmpty(data) {
 		if b := lib.ToMarshal(data); !lib.IsEmpty(b) {
-			res.Data = b
+			if fd := fields.ByName("data"); fd != nil && fd.Kind() == protoreflect.BytesKind {
+				r.Set(fd, protoreflect.ValueOfBytes(b))
+			}
 		}
 	}
 	return res, nil
@@ -67,15 +96,16 @@ func (srv *rbacService) Response(data any) (*gen.Response, error) {
 
 // rbacDispatch inspects ?key and, when it matches a known RBAC
 // operation, runs it against the manager and returns (response, true,
-// err). When key doesn't match, returns (nil, false, nil) so the
+// err). When key doesn't match, returns (zero Res, false, nil) so the
 // original CRUD switch keeps handling the request.
-func (srv *rbacService) Dispatch() (*gen.Response, bool, error) {
+func (srv *rbacService[Res]) Dispatch() (Res, bool, error) {
+	var zero Res
 	// Use srv.c.Query (populated from the passed `in`) rather than
 	// GrpcAction.Query — the latter reads goroutine-local storage and
 	// silently disagrees when a caller hands us a different request.
 	key := srv.c.Query("key")
 	if key == "" {
-		return nil, false, nil
+		return zero, false, nil
 	}
 	switch key {
 	// ---------- reads ----------
@@ -147,86 +177,86 @@ func (srv *rbacService) Dispatch() (*gen.Response, bool, error) {
 	// ---------- writes ----------
 	case "assign":
 		if !srv.IsAdmin() {
-			return nil, true, errors.New(cons.NoPermission)
+			return zero, true, errors.New(cons.NoPermission)
 		}
 		role := Rbac().GetItem(srv.c.Query("role"))
 		if role == nil {
-			return nil, true, errors.New("rbac: role not found")
+			return zero, true, errors.New("rbac: role not found")
 		}
 		userId := srv.rbacUserId()
 		a, err := Rbac().Assign(role, userId)
 		if err != nil {
-			return nil, true, err
+			return zero, true, err
 		}
 		rs, err := srv.Response(a)
 		return rs, true, err
 
 	case "revoke":
 		if !srv.IsAdmin() {
-			return nil, true, errors.New(cons.NoPermission)
+			return zero, true, errors.New(cons.NoPermission)
 		}
 		role := Rbac().GetItem(srv.c.Query("role"))
 		if role == nil {
-			return nil, true, errors.New("rbac: role not found")
+			return zero, true, errors.New("rbac: role not found")
 		}
 		userId := srv.rbacUserId()
 		if err := Rbac().Revoke(role, userId); err != nil {
-			return nil, true, err
+			return zero, true, err
 		}
 		rs, err := srv.Response(gin.H{"revoked": true, "role": role.Name, "user_id": userId})
 		return rs, true, err
 
 	case "revoke-all":
 		if !srv.IsAdmin() {
-			return nil, true, errors.New(cons.NoPermission)
+			return zero, true, errors.New(cons.NoPermission)
 		}
 		userId := srv.rbacUserId()
 		if err := Rbac().RevokeAll(userId); err != nil {
-			return nil, true, err
+			return zero, true, err
 		}
 		rs, err := srv.Response(gin.H{"revoked_all": true, "user_id": userId})
 		return rs, true, err
 
 	case "add-child":
 		if !srv.IsAdmin() {
-			return nil, true, errors.New(cons.NoPermission)
+			return zero, true, errors.New(cons.NoPermission)
 		}
 		parent := Rbac().GetItem(srv.c.Query("parent"))
 		child := Rbac().GetItem(srv.c.Query("child"))
 		if parent == nil || child == nil {
-			return nil, true, errors.New("rbac: parent or child not found")
+			return zero, true, errors.New("rbac: parent or child not found")
 		}
 		if err := Rbac().AddChild(parent, child); err != nil {
-			return nil, true, err
+			return zero, true, err
 		}
 		rs, err := srv.Response(gin.H{"parent": parent.Name, "child": child.Name})
 		return rs, true, err
 
 	case "remove-child":
 		if !srv.IsAdmin() {
-			return nil, true, errors.New(cons.NoPermission)
+			return zero, true, errors.New(cons.NoPermission)
 		}
 		parent := Rbac().GetItem(srv.c.Query("parent"))
 		child := Rbac().GetItem(srv.c.Query("child"))
 		if parent == nil || child == nil {
-			return nil, true, errors.New("rbac: parent or child not found")
+			return zero, true, errors.New("rbac: parent or child not found")
 		}
 		if err := Rbac().RemoveChild(parent, child); err != nil {
-			return nil, true, err
+			return zero, true, err
 		}
 		rs, err := srv.Response(gin.H{"removed": true, "parent": parent.Name, "child": child.Name})
 		return rs, true, err
 
 	case "remove-children":
 		if !srv.IsAdmin() {
-			return nil, true, errors.New(cons.NoPermission)
+			return zero, true, errors.New(cons.NoPermission)
 		}
 		parent := Rbac().GetItem(srv.c.Query("parent"))
 		if parent == nil {
-			return nil, true, errors.New("rbac: parent not found")
+			return zero, true, errors.New("rbac: parent not found")
 		}
 		if err := Rbac().RemoveChildren(parent); err != nil {
-			return nil, true, err
+			return zero, true, err
 		}
 		rs, err := srv.Response(gin.H{"removed_children_of": parent.Name})
 		return rs, true, err
@@ -238,7 +268,7 @@ func (srv *rbacService) Dispatch() (*gen.Response, bool, error) {
 
 	case "set-default-roles":
 		if !srv.IsAdmin() {
-			return nil, true, errors.New(cons.NoPermission)
+			return zero, true, errors.New(cons.NoPermission)
 		}
 		names := splitAndTrim(srv.c.Query("roles"), ",")
 		Rbac().SetDefaultRoles(names...)
@@ -249,13 +279,13 @@ func (srv *rbacService) Dispatch() (*gen.Response, bool, error) {
 		rs, err := srv.Response(gin.H{"default_roles": Rbac().GetDefaultRoles()})
 		return rs, true, err
 	}
-	return nil, false, nil
+	return zero, false, nil
 }
 
 // rbacUserId reads user_id from the query and falls back to the
 // caller's own id when omitted. Matches the "who am I asking about"
 // convention used elsewhere in this file.
-func (srv *rbacService) rbacUserId() uint32 {
+func (srv *rbacService[Res]) rbacUserId() uint32 {
 	id := lib.ToUint32(srv.c.Query("user_id"))
 	if id == 0 {
 		id = reqctx.UserID()
@@ -267,7 +297,7 @@ func (srv *rbacService) rbacUserId() uint32 {
 // gets threaded through executeRule. Skipping this for now keeps
 // the RPC lean; rules that need context get it from the userId
 // or by re-loading from the DB.
-func (srv *rbacService) rbacParams() map[string]any {
+func (srv *rbacService[Res]) rbacParams() map[string]any {
 	out := map[string]any{}
 	if raw := srv.c.Query("params"); raw != "" {
 		if n, err := strconv.Atoi(raw); err == nil {
