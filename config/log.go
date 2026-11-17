@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"sort"
 	"strings"
@@ -56,24 +57,37 @@ func (f *CustomFormatter) Format(entry *logrus.Entry) ([]byte, error) {
 	return b.Bytes(), nil
 }
 
+var (
+	// Frame-name prefixes skipped by callerOf. The package path is derived at
+	// runtime so this keeps working if the module is renamed or vendored.
+	configPkg         = reflect.TypeOf(Logger{}).PkgPath()
+	loggerFramePrefix = configPkg + ".(*Logger)."
+	fmtterFramePrefix = configPkg + ".(*CustomFormatter)."
+	callerFramePrefix = configPkg + ".callerOf"
+	logrusFramePrefix = reflect.TypeOf(logrus.Logger{}).PkgPath() + "."
+)
+
 // callerOf returns the first stack frame outside logrus and this package's
 // Logger wrapper, i.e. the line that actually issued the log call.
 func callerOf(entry *logrus.Entry) (string, int, bool) {
 	pcs := make([]uintptr, 32)
-	frames := runtime.CallersFrames(pcs[:runtime.Callers(3, pcs)])
+	n := runtime.Callers(2, pcs) // skip runtime.Callers and callerOf
+	frames := runtime.CallersFrames(pcs[:n])
 	for {
 		frame, more := frames.Next()
 		fn := frame.Function
-		if !strings.HasPrefix(fn, "github.com/sirupsen/logrus.") &&
-			!strings.HasPrefix(fn, "app/pkg/core/config.(*Logger).") &&
-			!strings.HasPrefix(fn, "app/pkg/core/config.(*CustomFormatter).") {
+		if fn != "" &&
+			!strings.HasPrefix(fn, logrusFramePrefix) &&
+			!strings.HasPrefix(fn, loggerFramePrefix) &&
+			!strings.HasPrefix(fn, fmtterFramePrefix) &&
+			!strings.HasPrefix(fn, callerFramePrefix) {
 			return frame.File, frame.Line, true
 		}
 		if !more {
 			break
 		}
 	}
-	if entry.HasCaller() {
+	if entry.Caller != nil {
 		return entry.Caller.File, entry.Caller.Line, true
 	}
 	return "", 0, false
