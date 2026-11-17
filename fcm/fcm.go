@@ -1,4 +1,4 @@
-package components
+package fcm
 
 import (
 	"context"
@@ -18,6 +18,14 @@ type (
 		Config *ConfigFcm
 	}
 )
+
+type ConfigFcm struct {
+	Title  string
+	Body   string
+	Token  string
+	Tokens []string
+	Topic  string
+}
 
 func NewFcmService(config *ConfigFcm) FcmService {
 	srv := &fcmService{
