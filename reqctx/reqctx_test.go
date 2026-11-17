@@ -33,6 +33,22 @@ func TestBind_ReleaseClears(t *testing.T) {
 	}
 }
 
+func TestBind_NestedRestoresOuter(t *testing.T) {
+	releaseOuter := Bind(Identity{UserID: 1}, "outer")
+	releaseInner := Bind(Identity{UserID: 2}, "inner")
+	if UserID() != 2 || Request() != "inner" {
+		t.Errorf("inner: got user=%d req=%v", UserID(), Request())
+	}
+	releaseInner()
+	if UserID() != 1 || Request() != "outer" {
+		t.Errorf("after inner release: got user=%d req=%v", UserID(), Request())
+	}
+	releaseOuter()
+	if UserID() != 0 || Request() != nil {
+		t.Errorf("after outer release: got user=%d req=%v", UserID(), Request())
+	}
+}
+
 func TestUnbound_IsAnonymous(t *testing.T) {
 	if UserID() != 0 || IsOwner(1) {
 		t.Error("an unbound goroutine must be anonymous")
@@ -146,7 +162,7 @@ func storeLen() int {
 var banned = regexp.MustCompile(`lib\.(LoggedId|GetLoggedId|IsOwner|SetMuStorage|GetMuStorage|SetLoggedUser|UnSetLoggedUser|Has|Clear)\(`)
 
 func TestNoGlobalIdentityCalls(t *testing.T) {
-	root, err := filepath.Abs("../../..") // module root
+	root, err := filepath.Abs("..") // module root (reqctx sits directly under it)
 	if err != nil {
 		t.Fatal(err)
 	}

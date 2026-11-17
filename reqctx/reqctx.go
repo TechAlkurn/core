@@ -56,10 +56,21 @@ var store sync.Map // goroutine id (uint64) -> *entry
 // Bind attaches id and req to the calling goroutine and returns a release
 // func that MUST be deferred: gRPC and net/http reuse goroutines, so a missed
 // release would leak this identity into the next request on that goroutine.
+//
+// Binds nest: release restores whatever was bound before (e.g. a handler that
+// calls another interceptor-wrapped handler in-process), and only clears the
+// slot when nothing was.
 func Bind(id Identity, req any) (release func()) {
 	g := goid()
+	prev, hadPrev := store.Load(g)
 	store.Store(g, &entry{id: id, req: req})
-	return func() { store.Delete(g) }
+	return func() {
+		if hadPrev {
+			store.Store(g, prev)
+			return
+		}
+		store.Delete(g)
+	}
 }
 
 func current() *entry {
