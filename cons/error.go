@@ -5,6 +5,7 @@ package cons
 const (
 	// ── Permission & authorization ────────────────────────────────
 	NoPermission               = "You don't have permission for perform action"
+	RecordNotFound             = "Record Not Found"
 	PermissionDenied           = "permission denied"
 	AuthRequired               = "authentication required"
 	AuthNotExist               = "authentication not exist"
