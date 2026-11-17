@@ -33,8 +33,8 @@ import (
 	"net/http"
 	"strings"
 
-	"app/pkg/core/cons"
-	"app/pkg/core/rbac"
+	"github.com/TechAlkurn/core/cons"
+	"github.com/TechAlkurn/core/rbac"
 
 	"github.com/TechAlkurn/core/reqctx"
 
