@@ -1,0 +1,34 @@
+// Test-only copy of the host app's Request/Response/CoreService shapes
+// (pkg/protos/data.proto, core.proto), so register's tests run without
+// importing a host package. Regenerate with `go generate ./register/...`.
+syntax = "proto3";
+
+package testpb;
+
+option go_package = "github.com/TechAlkurn/core/register/internal/testpb";
+
+service CoreService {
+  rpc HealthCheck(Request) returns (Response);
+  rpc Upload(stream UploadPayload) returns (Response);
+}
+
+message Response {
+  int32 status = 1;
+  string message = 2;
+  string token = 3;
+  bytes data = 4;
+}
+
+message Request {
+  bytes form = 1;
+  string query = 2;
+  uint32 primary_id = 3;
+  string identifier = 4;
+  uint32 user_id = 5;
+  repeated string roles = 6;
+  map<string, string> meta = 7;
+}
+
+message UploadPayload {
+  bytes chunk = 1;
+}
