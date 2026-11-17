@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"app/pkg/core/cons"
+	"github.com/TechAlkurn/core/cons"
 
 	"github.com/TechAlkurn/core/db/activerecord"
 

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"app/pkg/core/cons"
+	"github.com/TechAlkurn/core/cons"
 
 	"aidanwoods.dev/go-paseto"
 	"github.com/TechAlkurn/core/db/activerecord"
