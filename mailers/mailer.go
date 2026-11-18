@@ -5,9 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"html/template"
+	"net/mail"
+	"regexp"
 	"strings"
 
 	"github.com/TechAlkurn/core/cons"
+	"github.com/TechAlkurn/core/lib"
 	"github.com/TechAlkurn/core/mailers/drivers"
 
 	"github.com/TechAlkurn/core/config"
@@ -194,4 +197,63 @@ func (em *Mailer) _inQueue(mailer map[string]any, status int) bool {
 		return false
 	}
 	return true
+}
+
+var (
+	reGmailNumericAlias = regexp.MustCompile(`\+\d+$`)
+	reDomainTLD         = regexp.MustCompile(`\.[a-zA-Z]{2,}$`)
+	reValidLocalPart    = regexp.MustCompile(`^[a-zA-Z0-9._%+-]+$`)
+)
+
+// ValidateEmail checks if the email is valid according to business rules
+func ValidateEmail(email string) bool {
+	disposable_domains := config.GetString("disposable_domains")
+	is_dummy_email := config.GetString("is_dummy_email")
+	if lib.NotEmpty(is_dummy_email) && is_dummy_email == "Yes" {
+		return true
+	}
+	var disposableDomains []string
+	for _, d := range strings.Split(disposable_domains, ",") {
+		if d = strings.ToLower(strings.TrimSpace(d)); d != "" {
+			disposableDomains = append(disposableDomains, d)
+		}
+	}
+	// Step 1: Basic RFC 5322 check
+	addr, err := mail.ParseAddress(email)
+	if err != nil {
+		return false
+	}
+
+	// Step 2: Extract local part and domain
+	parts := strings.Split(addr.Address, "@")
+	if len(parts) != 2 {
+		return false
+	}
+	localPart := parts[0]
+	domain := strings.ToLower(parts[1])
+
+	// Step 3: Reject disposable domains
+	if lib.InArray(domain, disposableDomains) {
+		return false
+	}
+
+	// Step 4: Reject Gmail aliases like +1, +2 etc.
+	if strings.HasSuffix(domain, "gmail.com") {
+		if reGmailNumericAlias.MatchString(localPart) {
+			return false
+		}
+	}
+
+	// Step 5: Reject domains without a dot or incomplete TLDs
+	if !strings.Contains(domain, ".") {
+		return false
+	}
+
+	// Optional: stricter domain regex (letters after last dot, at least 2 chars)
+	if !reDomainTLD.MatchString(domain) {
+		return false
+	}
+
+	// Step 6: Strict local-part pattern
+	return reValidLocalPart.MatchString(localPart)
 }
