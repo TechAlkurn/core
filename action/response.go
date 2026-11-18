@@ -89,6 +89,7 @@ func (g *Gin) Response(raw ProtoResponse) {
 	// Explicit proto fields; keys lifted out of data only fill them when empty.
 	// response.Message = raw.GetMessage()
 	// response.Token = raw.GetToken()
+
 	g.C.Header("Content-Type", "application/json")
 
 	// Safely handle empty responses
