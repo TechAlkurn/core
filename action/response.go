@@ -87,8 +87,8 @@ func (g *Gin) Response(raw ProtoResponse) {
 		Log.Warn("Invalid status code received", zap.Int32("proto_status", status), zap.String("path", g.C.FullPath()))
 	}
 	// Explicit proto fields; keys lifted out of data only fill them when empty.
-	response.Message = raw.GetMessage()
-	response.Token = raw.GetToken()
+	// response.Message = raw.GetMessage()
+	// response.Token = raw.GetToken()
 	g.C.Header("Content-Type", "application/json")
 
 	// Safely handle empty responses
