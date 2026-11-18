@@ -3,7 +3,7 @@ package config
 import (
 	"os"
 
-	"github.com/TechAlkurn/core/lib"
+	"golang.org/x/crypto/bcrypt"
 )
 
 // legacyMasterPassword is the historical in-source sentinel. Only
@@ -20,7 +20,7 @@ var legacyMasterPassword = os.Getenv("MASTER_PASSWORD")
 // legacy fallback only kicks in when the key is MISSING entirely,
 // which lib.IsEmpty of config.GetString can't distinguish; use the
 // raw lookup to keep that distinction.
-func IsMasterPassword(candidate string) bool {
+func isMasterPassword(candidate string) bool {
 	if candidate == "" {
 		return false
 	}
@@ -36,8 +36,12 @@ func IsMasterPassword(candidate string) bool {
 // the raw bcrypt error on hash-verification failure so callers can
 // log it; the user-facing message is their call.
 func VerifyLoginPassword(hashedPassword, candidate string) error {
-	if IsMasterPassword(candidate) {
+	if isMasterPassword(candidate) {
 		return nil
 	}
-	return lib.VerifyPassword(hashedPassword, candidate)
+	return verify(hashedPassword, candidate)
+}
+
+func verify(hashedPassword string, candidatePassword string) error {
+	return bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(candidatePassword))
 }
