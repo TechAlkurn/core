@@ -65,5 +65,8 @@ func (entity *UserAttempt) IncrementLoginAttempt() {
 }
 
 func (entity *UserAttempt) ClearLoginAttempt() {
-	activerecord.Exec("DELETE FROM `user_login_attempt` WHERE `key` = ?", entity.Key)
+	if lib.NotEmpty(entity.Key) {
+		activerecord.Exec("DELETE FROM `user_login_attempt` WHERE `key` = ?", entity.Key)
+	}
+	activerecord.Exec("TRUNCATE TABLE `user_login_attempt`")
 }
