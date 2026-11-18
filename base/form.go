@@ -5,6 +5,8 @@
 package base
 
 import (
+	"errors"
+	"maps"
 	"reflect"
 	"slices"
 
@@ -142,7 +144,7 @@ func (frm *BaseForm[T]) GetForm(key string, dest any) {
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		elem.SetInt(lib.ToInt64(raw))
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		elem.SetUint(uint64(lib.ToUint64(raw)))
+		elem.SetUint(lib.ToUint64(raw))
 	case reflect.Float32, reflect.Float64:
 		elem.SetFloat(lib.ToFloat64(raw))
 	default:
@@ -195,11 +197,33 @@ func (frm *BaseForm[T]) FindItem(arg ...any) *T {
 	return frm.FindOne(query, args...)
 }
 
+// findItemErr is FindItem for the save path: "not found" still yields a
+// fresh T, but any other DB error is returned so SaveItem never turns a
+// failed lookup into an INSERT.
+func (frm *BaseForm[T]) findItemErr() (*T, error) {
+	query, args, ok := frm.pkLookup()
+	if !ok {
+		return new(T), nil
+	}
+	entity, err := frm.ModelItem.FindOne(query, args...)
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return new(T), nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return entity, nil
+}
+
 // SaveItem upserts the body into T (insert for a new record, update
 // otherwise), syncs the saved primary key back into PrimaryId, then runs
 // AfterSave.
 func (frm *BaseForm[T]) SaveItem() (modelItem *T, err error) {
-	modelItem, err = frm.ModelItem.SaveDB(frm.FindItem(), frm.Form, frm.tx)
+	existing, err := frm.findItemErr()
+	if err != nil {
+		return nil, err
+	}
+	modelItem, err = frm.ModelItem.SaveDB(existing, frm.Form, frm.tx)
 	if err != nil {
 		return nil, err
 	}
@@ -216,10 +240,11 @@ func (frm *BaseForm[T]) SaveItem() (modelItem *T, err error) {
 	return modelItem, err
 }
 
-// SaveIfPresents runs handlers[key] for every key sent in the body, stopping
-// at the first error.
+// SaveIfPresents runs handlers[key] for every key sent in the body, in key
+// order, stopping at the first error.
 func (frm *BaseForm[T]) SaveIfPresents(handlers map[string]func(any) error) error {
-	for key, handler := range handlers {
+	for _, key := range slices.Sorted(maps.Keys(handlers)) {
+		handler := handlers[key]
 		item, ok := frm.Form[key]
 		if !ok {
 			continue
@@ -233,9 +258,11 @@ func (frm *BaseForm[T]) SaveIfPresents(handlers map[string]func(any) error) erro
 }
 
 // SaveIfPresentsWithDefault is SaveIfPresents, but a key missing from the
-// body runs its handler with defaultValue instead of being skipped.
+// body runs its handler with defaultValue instead of being skipped. Handlers
+// run in key order.
 func (frm *BaseForm[T]) SaveIfPresentsWithDefault(handlers map[string]func(any) error, defaultValue any) error {
-	for key, handler := range handlers {
+	for _, key := range slices.Sorted(maps.Keys(handlers)) {
+		handler := handlers[key]
 		item, ok := frm.Form[key]
 		if !ok {
 			item = defaultValue
