@@ -6,6 +6,7 @@ require (
 	aidanwoods.dev/go-paseto v1.6.0
 	cloud.google.com/go/storage v1.71.0
 	firebase.google.com/go v3.13.0+incompatible
+	github.com/AgoraIO-Community/go-tokenbuilder v1.5.0
 	github.com/adyen/adyen-go-api-library/v21 v21.2.3
 	github.com/aws/aws-sdk-go-v2 v1.48.0
 	github.com/aws/aws-sdk-go-v2/config v1.33.19
@@ -25,6 +26,7 @@ require (
 	github.com/joho/godotenv v1.5.1
 	github.com/mailjet/mailjet-apiv3-go v0.0.0-20201009050126-c24bc15a9394
 	github.com/minio/minio-go/v7 v7.4.1
+	github.com/morkid/paginate v1.1.11
 	github.com/nfnt/resize v0.0.0-20180221191011-83c6a9932646
 	github.com/prometheus/client_golang v1.25.0
 	github.com/robfig/go-cache v0.0.0-20130306151617-9fc39e0dbf62
@@ -128,7 +130,6 @@ require (
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/morkid/gocache v1.0.3 // indirect
-	github.com/morkid/paginate v1.1.11 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/patrickmn/go-cache v2.1.0+incompatible // indirect
 	github.com/pelletier/go-toml/v2 v2.4.3 // indirect
