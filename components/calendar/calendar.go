@@ -218,3 +218,7 @@ func (e *eventCalendar) EventView(eventId string) (*calendar.Event, error) {
 	}
 	return et, nil
 }
+
+func (e *eventCalendar) GetEventAttendee(email string) *calendar.EventAttendee {
+	return &calendar.EventAttendee{Email: email}
+}
