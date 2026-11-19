@@ -9,9 +9,9 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/TechAlkurn/core/components/mailers/drivers"
 	"github.com/TechAlkurn/core/cons"
 	"github.com/TechAlkurn/core/lib"
-	"github.com/TechAlkurn/core/mailers/drivers"
 
 	"github.com/TechAlkurn/core/config"
 
