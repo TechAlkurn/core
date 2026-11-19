@@ -29,6 +29,7 @@ import (
 	"github.com/stripe/stripe-go/v79/paymentmethod"
 	"github.com/stripe/stripe-go/v79/price"
 	"github.com/stripe/stripe-go/v79/product"
+	"github.com/stripe/stripe-go/v79/refund"
 	"github.com/stripe/stripe-go/v79/source"
 	"github.com/stripe/stripe-go/v79/subscription"
 	"github.com/stripe/stripe-go/v79/terminal/connectiontoken"
@@ -79,6 +80,7 @@ type StripePayment interface {
 	StripeQR(amount, qty int64, url string, desc uint32) (result *stripe.PaymentLink, err error)
 	CreatePaymentMethod(token string) (result *stripe.PaymentMethod, err error)
 	PaymentLink(plink string) (result *stripe.PaymentLink, err error)
+	StripeRefund(paymentId string, amount int64) (result *stripe.Refund, err error)
 
 	/* Terminal (POS)*/
 	StripePos(amount float64, currency string) (result any, err error)
@@ -701,6 +703,37 @@ func (s *stripePayment) PaymentLink(plink string) (result *stripe.PaymentLink, e
 		return nil, err
 	}
 	return
+}
+
+// StripeRefund refunds a payment. paymentId is either a PaymentIntent ID
+// ("pi_...") or a Charge ID ("ch_..."). amount is in the smallest currency
+// unit (cents); 0 refunds the full remaining amount.
+func (s *stripePayment) StripeRefund(paymentId string, amount int64) (result *stripe.Refund, err error) {
+	s.LoadStripeKey()
+	paymentId = strings.TrimSpace(paymentId)
+	if paymentId == "" {
+		return nil, errors.New("missing payment id for refund")
+	}
+	if amount < 0 {
+		return nil, errors.New(cons.InvalidAmount)
+	}
+	params := &stripe.RefundParams{}
+	switch {
+	case strings.HasPrefix(paymentId, "pi_"):
+		params.PaymentIntent = stripe.String(paymentId)
+	case strings.HasPrefix(paymentId, "ch_"), strings.HasPrefix(paymentId, "py_"):
+		params.Charge = stripe.String(paymentId)
+	default:
+		return nil, fmt.Errorf("unsupported payment id for refund: %s", paymentId)
+	}
+	if amount > 0 {
+		params.Amount = stripe.Int64(amount)
+	}
+	result, err = refund.New(params)
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 
 func (s *stripePayment) StripeCreateSubscription(in Request) (result *stripe.Subscription, err error) {
