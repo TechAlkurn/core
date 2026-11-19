@@ -1,4 +1,4 @@
-package components
+package config
 
 import (
 	"bytes"
@@ -7,8 +7,6 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-
-	"app/pkg/config"
 
 	"github.com/TechAlkurn/core/lib"
 )
@@ -24,10 +22,10 @@ func SendErrorAlert(recovered any, stack string) {
 }
 
 func _send(description string) error {
-	token := config.GetString("gitlab_token")
-	projectID := config.GetString("gitlab_project_id")
+	token := GetString("gitlab_token")
+	projectID := GetString("gitlab_project_id")
 	if lib.IsEmpty(projectID) {
-		projectID = config.GetString("gitlab_project_id")
+		projectID = GetString("gitlab_project_id")
 	}
 	if token == "" || projectID == "" {
 		return fmt.Errorf("missing GITLAB_TOKEN or GITLAB_PROJECT_ID")
@@ -54,6 +52,6 @@ func _send(description string) error {
 		_, _ = body.ReadFrom(resp.Body)
 		return fmt.Errorf("GitLab API error: %s - %s", resp.Status, body.String())
 	}
-	config.Log.Info("GitLab issue created successfully")
+	Log.Info("GitLab issue created successfully")
 	return nil
 }
