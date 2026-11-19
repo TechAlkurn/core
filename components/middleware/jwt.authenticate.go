@@ -10,7 +10,7 @@ import (
 
 	"github.com/TechAlkurn/core/cons"
 
-	"github.com/TechAlkurn/core/authorization"
+	"github.com/TechAlkurn/core/components/authorization"
 
 	"github.com/TechAlkurn/core/action"
 	"github.com/TechAlkurn/core/db/activerecord"

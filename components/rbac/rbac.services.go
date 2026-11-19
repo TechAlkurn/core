@@ -12,9 +12,9 @@ import (
 	"strings"
 
 	"github.com/TechAlkurn/core/action"
+	"github.com/TechAlkurn/core/components/rbac/model"
 	"github.com/TechAlkurn/core/cons"
 	"github.com/TechAlkurn/core/lib"
-	"github.com/TechAlkurn/core/rbac/model"
 	"github.com/TechAlkurn/core/reqctx"
 	"github.com/gin-gonic/gin"
 	"google.golang.org/protobuf/proto"

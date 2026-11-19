@@ -14,9 +14,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/TechAlkurn/core/components/middleware"
 	"github.com/TechAlkurn/core/config"
 	"github.com/TechAlkurn/core/cons"
-	"github.com/TechAlkurn/core/middleware"
 
 	"github.com/TechAlkurn/core/reqctx"
 

@@ -29,8 +29,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/TechAlkurn/core/components/rbac/model"
 	"github.com/TechAlkurn/core/cons"
-	"github.com/TechAlkurn/core/rbac/model"
 
 	"github.com/TechAlkurn/core/config"
 
