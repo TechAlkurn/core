@@ -43,6 +43,8 @@ func storagePath() string {
 	if config.IsAwsS3 {
 		return os.Getenv("S3_CDN_STORAGEPATH")
 	}
+	config.Log.Printf("%v\n", os.Getenv("STORAGE_PATH"))
+
 	return os.Getenv("STORAGE_PATH")
 }
 
