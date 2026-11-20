@@ -161,7 +161,7 @@ func (cmp *uploader) Upload(c *gin.Context) (medias []map[string]any, err error)
 			config.Log.Errorf("Upload[%d]: saveToMedia failed for %q: %v", i, file.Filename, sErr)
 			return nil, sErr
 		}
-		medias = append(medias, transform)
+		medias = append(medias, transformMap(transform))
 	}
 	//	config.Log.Infof("Upload: completed, %d media row(s) returned", len(medias))
 	return medias, nil
@@ -216,8 +216,8 @@ func transformMap(media map[string]any) map[string]any {
 	if media == nil {
 		return nil
 	}
-	path := lib.ToString(media["path"])
-	mimetype := lib.ToString(media["mimetype"])
+	path := columnString(media["path"])
+	mimetype := columnString(media["mimetype"])
 	t := (&CoreMedia{Path: &path, Mimetype: &mimetype}).Transform()
 
 	media["path"] = t.Path
@@ -228,6 +228,15 @@ func transformMap(media map[string]any) map[string]any {
 	media["banner"] = t.Banner
 	media["video_url"] = t.VideoUrl
 	return media
+}
+
+// columnString reads a raw-scanned column value; MySQL text columns can come
+// back as []byte, which lib.ToString would format as "[104 116 ...]".
+func columnString(v any) string {
+	if b, ok := v.([]byte); ok {
+		return string(b)
+	}
+	return lib.ToString(v)
 }
 
 // SaveFile writes a streamed upload to local storage and records it in
@@ -250,7 +259,11 @@ func (cmp *uploader) SaveFile(metadata map[string]any, data []byte) (map[string]
 	if err := os.WriteFile(dst, data, 0o644); err != nil {
 		return nil, fmt.Errorf("failed to write file: %v", err)
 	}
-	return cmp._saveMedia(metadata)
+	media, err := cmp._saveMedia(metadata)
+	if err != nil {
+		return nil, err
+	}
+	return transformMap(media), nil
 }
 
 func (cmp *uploader) FilePath(filename string) (string, string, string) {
@@ -276,21 +289,20 @@ func (cmp *uploader) saveToMedia(file *multipart.FileHeader, path string) (map[s
 	return cmp._insertMedia(file.Filename, int32(file.Size), path, mimetype)
 }
 
-// _insertMedia inserts one core_media row and returns it as a column map. Every
-// upload gets a fresh uuid path, so this is always a new row (the table's only
-// unique key is guid, which uploads don't set — an upsert would never match).
+// _insertMedia inserts one core_media row (with a fresh guid) and returns it
+// as a column map.
 func (cmp *uploader) _insertMedia(filename string, filesize int32, path, mimetype string) (map[string]any, error) {
 	now := time.Now().Unix()
-	sql := "INSERT INTO `core_media` (`filename`, `filesize`, `path`, `mimetype`, `created_at`, `updated_at`) VALUES (?, ?, ?, ?, ?, ?)"
-	if err := activerecord.Exec(sql, filename, filesize, path, mimetype, now, now).Error; err != nil {
+	guid := uuid.NewString()
+	sql := "INSERT INTO `core_media` (`guid`, `filename`, `filesize`, `path`, `mimetype`, `created_at`, `updated_at`) VALUES (?, ?, ?, ?, ?, ?, ?)"
+	if err := activerecord.Exec(sql, guid, filename, filesize, path, mimetype, now, now).Error; err != nil {
 		return nil, err
 	}
-	// Read the row back by its path (a fresh uuid per upload, so it matches
-	// only this insert). LAST_INSERT_ID() isn't safe here: Exec and the next
-	// query can run on different pooled connections.
+	// Read the row back by its unique guid. LAST_INSERT_ID() isn't safe here:
+	// Exec and the next query can run on different pooled connections.
 	var media map[string]any
-	sql = "SELECT * FROM `core_media` WHERE `path` = ? ORDER BY `id` DESC LIMIT 1"
-	if err := activerecord.Raw(sql, path).Scan(&media).Error; err != nil {
+	sql = "SELECT * FROM `core_media` WHERE `guid` = ? LIMIT 1"
+	if err := activerecord.Raw(sql, guid).Scan(&media).Error; err != nil {
 		return nil, err
 	}
 	if media == nil {
