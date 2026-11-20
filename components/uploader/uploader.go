@@ -49,7 +49,6 @@ func storagePath() string {
 }
 
 type CoreMedia struct {
-	activerecord.ActiveRecord[CoreMedia]
 	Id        uint32  `gorm:"primaryKey;autoIncrement;column:id;type:int(10) unsigned;not null;" json:"id"`
 	Guid      *string `gorm:"uniqueIndex:udx_guid;column:guid;type:varchar(255);default:null;" json:"guid"`
 	Alt       *string `gorm:"column:alt;type:varchar(100);default:null;" json:"alt"`
@@ -184,7 +183,7 @@ func (m *CoreMedia) Transform() *TransformCoreMedia {
 		transform.Path = fmt.Sprintf("%s/%s", storagePath(), p)
 	}
 
-	config.Log.Printf("transform.Path: %v\n", transform.Path)
+	log.Printf("transform.Path: %v\n", transform.Path)
 
 	full := m.GetMimetype()
 	if full == "" {
@@ -203,7 +202,6 @@ func (m *CoreMedia) Transform() *TransformCoreMedia {
 		thumbHeight := lib.ToInt(os.Getenv("THUMB_HEIGHT"))
 		bannerWidth := lib.ToInt(os.Getenv("BANNER_WIDTH"))
 		bannerHeight := lib.ToInt(os.Getenv("BANNER_HEIGHT"))
-
 		transform.Thumb = mediaimage.Thumb(m.GetPath(), thumbWidth, thumbHeight)
 		transform.Banner = mediaimage.Thumb(m.GetPath(), bannerWidth, bannerHeight)
 	}
