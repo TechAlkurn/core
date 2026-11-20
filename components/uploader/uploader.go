@@ -155,7 +155,7 @@ func (cmp *uploader) Upload(c *gin.Context) (medias []map[string]any, err error)
 			config.Log.Errorf("Upload[%d]: saveToMedia failed for %q: %v", i, file.Filename, sErr)
 			return nil, sErr
 		}
-		medias = append(medias, transformMap(transform))
+		medias = append(medias, transform)
 	}
 	//	config.Log.Infof("Upload: completed, %d media row(s) returned", len(medias))
 	return medias, nil
