@@ -24,6 +24,7 @@ import (
 	"github.com/TechAlkurn/core/db/activerecord"
 
 	"cloud.google.com/go/storage"
+	mediaimage "github.com/TechAlkurn/core/components/image"
 	"github.com/TechAlkurn/core/lib"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -35,6 +36,57 @@ import (
 	"github.com/google/uuid"
 	"github.com/nfnt/resize"
 )
+
+// storagePath returns the public base URL for stored files. It is read at call
+// time (not package init) because config.InitEnv loads .env after init runs.
+func storagePath() string {
+	if config.IsAwsS3 {
+		return os.Getenv("S3_CDN_STORAGEPATH")
+	}
+	return os.Getenv("STORAGE_PATH")
+}
+
+type CoreMedia struct {
+	activerecord.ActiveRecord[CoreMedia]
+	Id        uint32  `gorm:"primaryKey;autoIncrement;column:id;type:int(10) unsigned;not null;" json:"id"`
+	Guid      *string `gorm:"uniqueIndex:udx_guid;column:guid;type:varchar(255);default:null;" json:"guid"`
+	Alt       *string `gorm:"column:alt;type:varchar(100);default:null;" json:"alt"`
+	Title     *string `gorm:"column:title;type:varchar(100);default:null;" json:"title"`
+	Filename  *string `gorm:"column:filename;type:varchar(255);default:null;" json:"filename"`
+	Filesize  *int32  `gorm:"column:filesize;type:int(11);default:null;" json:"filesize"`
+	Path      *string `gorm:"column:path;type:text;default:null;" json:"path"`
+	Mimetype  *string `gorm:"column:mimetype;type:varchar(255);default:null;" json:"mimetype"`
+	Status    *int8   `gorm:"column:status;type:tinyint(4);not null;default:1" json:"status"`
+	CreatedAt uint32  `gorm:"column:created_at;type:int(11) unsigned;not null;autoCreateTime;" json:"created_at"`
+	UpdatedAt uint32  `gorm:"column:updated_at;type:int(11) unsigned;not null;autoCreateTime;autoUpdateTime;" json:"updated_at"`
+}
+
+func (m *CoreMedia) GetPath() string {
+	if m == nil || m.Path == nil {
+		return ""
+	}
+	return *m.Path
+}
+
+func (m *CoreMedia) GetMimetype() string {
+	if m == nil || m.Mimetype == nil {
+		return ""
+	}
+	return *m.Mimetype
+}
+
+type TransformCoreMedia struct {
+	*CoreMedia
+	// Mimetype shadows CoreMedia.Mimetype with the top-level type ("image",
+	// "video", …) so the source row isn't mutated; FullMimetype keeps the rest.
+	Mimetype     *string `json:"mimetype"`
+	Path         string  `json:"path"`
+	Type         string  `json:"type"`
+	Thumb        string  `json:"thumb"`
+	Banner       string  `json:"banner"`
+	VideoUrl     string  `json:"video_url"`
+	FullMimetype string  `json:"full_mimetype"`
+}
 
 type Uploader interface {
 	Upload(c *gin.Context) (medias []map[string]any, err error)
@@ -103,10 +155,73 @@ func (cmp *uploader) Upload(c *gin.Context) (medias []map[string]any, err error)
 			config.Log.Errorf("Upload[%d]: saveToMedia failed for %q: %v", i, file.Filename, sErr)
 			return nil, sErr
 		}
-		medias = append(medias, transform)
+		medias = append(medias, transformMap(transform))
 	}
 	//	config.Log.Infof("Upload: completed, %d media row(s) returned", len(medias))
 	return medias, nil
+}
+
+// Transform builds the API view of a core_media row: public path, thumb and
+// banner URLs for images, and video_url for videos.
+func (m *CoreMedia) Transform() *TransformCoreMedia {
+	if m == nil {
+		return nil
+	}
+	transform := TransformCoreMedia{
+		CoreMedia:    m,
+		Mimetype:     m.Mimetype,
+		FullMimetype: m.GetMimetype(),
+	}
+	if p := m.GetPath(); p != "" {
+		transform.Path = fmt.Sprintf("%s/%s", storagePath(), p)
+	}
+
+	full := m.GetMimetype()
+	if full == "" {
+		return &transform
+	}
+	kind, subtype, _ := strings.Cut(full, "/")
+	transform.Mimetype = &kind
+	transform.Type = kind
+
+	switch {
+	case lib.InArray(subtype, []string{"webp", "svg", "svg+xml"}):
+		transform.Thumb = transform.Path
+		transform.Banner = transform.Path
+	case kind == cons.CORE_MEDIA_MIME_TYPE_IMAGE && lib.InArray(subtype, []string{"png", "jpg", "jpeg", "gif"}):
+		thumbWidth := lib.ToInt(os.Getenv("THUMB_WIDTH"))
+		thumbHeight := lib.ToInt(os.Getenv("THUMB_HEIGHT"))
+		bannerWidth := lib.ToInt(os.Getenv("BANNER_WIDTH"))
+		bannerHeight := lib.ToInt(os.Getenv("BANNER_HEIGHT"))
+
+		transform.Thumb = mediaimage.Thumb(m.GetPath(), thumbWidth, thumbHeight)
+		transform.Banner = mediaimage.Thumb(m.GetPath(), bannerWidth, bannerHeight)
+	}
+	if kind == cons.CORE_MEDIA_MIME_TYPE_VIDEO {
+		transform.VideoUrl = transform.Path
+	}
+	return &transform
+}
+
+// transformMap applies CoreMedia.Transform to a core_media row returned as a
+// column map, so Upload responses carry the same path/thumb/banner/video_url/
+// mimetype/full_mimetype/type fields as a transformed CoreMedia.
+func transformMap(media map[string]any) map[string]any {
+	if media == nil {
+		return nil
+	}
+	path := lib.ToString(media["path"])
+	mimetype := lib.ToString(media["mimetype"])
+	t := (&CoreMedia{Path: &path, Mimetype: &mimetype}).Transform()
+
+	media["path"] = t.Path
+	media["mimetype"] = t.Mimetype
+	media["full_mimetype"] = t.FullMimetype
+	media["type"] = t.Type
+	media["thumb"] = t.Thumb
+	media["banner"] = t.Banner
+	media["video_url"] = t.VideoUrl
+	return media
 }
 
 // SaveFile writes a streamed upload to local storage and records it in
@@ -182,9 +297,9 @@ func (cmp *uploader) IsValidFile(file, arg string) error {
 	if lib.IsEmpty(arg) {
 		return nil
 	}
-	ext := filepath.Ext(file)
+	ext := strings.TrimPrefix(strings.ToLower(filepath.Ext(file)), ".")
 	exts := lib.Explode(",", config.GetString(arg))
-	if !lib.InArray(ext[1:], exts) {
+	if ext == "" || !lib.InArray(ext, exts) {
 		return errors.New(cons.UnSupportedFileFormat)
 	}
 	return nil
@@ -221,9 +336,10 @@ func (cmp *uploader) _s3upload(file multipart.File, fileHeader *multipart.FileHe
 	// get the file size and read
 	// the file content into a buffer
 
-	size := fileHeader.Size
-	buffer := make([]byte, size)
-	_, _ = file.Read(buffer)
+	buffer, err := io.ReadAll(file)
+	if err != nil {
+		return "", err
+	}
 	full_path, dir, newFileName := cmp.FilePath(fileHeader.Filename)
 
 	// create a unique file name for the file
@@ -245,23 +361,43 @@ func (cmp *uploader) _s3upload(file multipart.File, fileHeader *multipart.FileHe
 	// Get the width and height of the image
 	width, height, err := cmp._imageDimensions(bytes.NewReader(buffer))
 	if err != nil {
-		return "", err
+		// Not a decodable image (video, pdf, svg, …): store the original as-is.
+		_, err = config.AwsS3.PutObject(context.TODO(), &s3.PutObjectInput{
+			Bucket:               aws.String(bucketName),
+			Key:                  aws.String(fileName),
+			ACL:                  types.ObjectCannedACLPublicRead,
+			Body:                 bytes.NewReader(buffer),
+			ContentLength:        aws.Int64(int64(len(buffer))),
+			ContentType:          aws.String(http.DetectContentType(buffer)),
+			ServerSideEncryption: types.ServerSideEncryptionAes256,
+			StorageClass:         types.StorageClass("INTELLIGENT_TIERING"),
+		})
+		if err != nil {
+			return "", err
+		}
+		return baseName, nil
 	}
-	// cfg.Log.Println("width:", width, "height:", height)
 	var fileSizes []map[string]any
 	if width > 0 && height > 0 {
 		fileSizes = append(fileSizes, map[string]any{"w": width, "h": height, "f": fileName})
 	}
-	var cacheURL string
+	// Cache keys follow components/image.Thumb's "<name>-<w>-<h>.<ext>" naming
+	// so thumb and banner don't overwrite each other.
+	cacheKey := func(w, h int) string {
+		ext := filepath.Ext(fileName)
+		name := strings.Replace(strings.TrimSuffix(fileName, ext), "storage", "cache", 1)
+		return fmt.Sprintf("%s-%d-%d%s", name, w, h, ext)
+	}
 	thumbWidth := lib.ToInt(os.Getenv("THUMB_WIDTH"))
-	// thumbHeight := lib.ToInt(os.Getenv("THUMB_HEIGHT"))
-	cacheURL = strings.Replace(fileName, "storage", "cache", 1)
-	fileSizes = append(fileSizes, map[string]any{"w": thumbWidth, "h": thumbWidth, "f": cacheURL})
-
+	thumbHeight := lib.ToInt(os.Getenv("THUMB_HEIGHT"))
+	if thumbWidth > 0 && thumbHeight > 0 {
+		fileSizes = append(fileSizes, map[string]any{"w": thumbWidth, "h": thumbHeight, "f": cacheKey(thumbWidth, thumbHeight)})
+	}
 	bannerWidth := lib.ToInt(os.Getenv("BANNER_WIDTH"))
-	// bannerHeight := lib.ToInt(os.Getenv("BANNER_HEIGHT"))
-	cacheURL = strings.Replace(fileName, "storage", "cache", 1)
-	fileSizes = append(fileSizes, map[string]any{"w": bannerWidth, "h": bannerWidth, "f": cacheURL})
+	bannerHeight := lib.ToInt(os.Getenv("BANNER_HEIGHT"))
+	if bannerWidth > 0 && bannerHeight > 0 {
+		fileSizes = append(fileSizes, map[string]any{"w": bannerWidth, "h": bannerHeight, "f": cacheKey(bannerWidth, bannerHeight)})
+	}
 
 	// cfg.Log.Println("fileSizes:", fileSizes)
 
@@ -303,7 +439,7 @@ func (cmp *uploader) _s3upload(file multipart.File, fileHeader *multipart.FileHe
 
 	/* New code end */
 
-	return baseName, err
+	return baseName, nil
 }
 
 func (cmp *uploader) _imageDimensions(reader io.Reader) (int, int, error) {
@@ -428,7 +564,7 @@ func UploadStreamImage(w http.ResponseWriter, r *http.Request) {
 	resp, err := config.AwsS3.PutObject(context.TODO(), &s3.PutObjectInput{
 		Bucket: aws.String(bucketName),
 		Key:    aws.String(path),
-		Body:   file,
+		Body:   bytes.NewReader(buf.Bytes()),
 		ACL:    types.ObjectCannedACLPublicRead,
 	})
 	if err != nil {

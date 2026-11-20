@@ -29,6 +29,12 @@ const (
 	CORE_CONFIG_IS_ENCRYPTED_YES = 1
 )
 
+/* Core media */
+const (
+	CORE_MEDIA_MIME_TYPE_IMAGE = "image"
+	CORE_MEDIA_MIME_TYPE_VIDEO = "video"
+)
+
 /* Core mail */
 const (
 	CORE_MAIL_STATUS_NO = 0
