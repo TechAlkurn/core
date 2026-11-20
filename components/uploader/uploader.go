@@ -61,6 +61,12 @@ type CoreMedia struct {
 	UpdatedAt uint32  `gorm:"column:updated_at;type:int(11) unsigned;not null;autoCreateTime;autoUpdateTime;" json:"updated_at"`
 }
 
+// TableName must be declared here: without it the promoted
+// ActiveRecord.TableName is used, which resolved to "coremedia".
+func (m *CoreMedia) TableName() string {
+	return "core_media"
+}
+
 func (m *CoreMedia) GetPath() string {
 	if m == nil || m.Path == nil {
 		return ""
@@ -89,10 +95,10 @@ type TransformCoreMedia struct {
 }
 
 type Uploader interface {
-	Upload(c *gin.Context) (medias []*TransformCoreMedia, err error)
+	Upload(c *gin.Context) (medias []map[string]any, err error)
 	IsValidFile(file, arg string) error
 	FilePath(filename string) (string, string, string)
-	SaveFile(metadata map[string]any, data []byte) (*TransformCoreMedia, error)
+	SaveFile(metadata map[string]any, data []byte) (map[string]any, error)
 }
 
 type uploader struct {
@@ -108,7 +114,7 @@ func NewUploader() Uploader {
 	return &uploader{AwsS3: s3}
 }
 
-func (cmp *uploader) Upload(c *gin.Context) (medias []*TransformCoreMedia, err error) {
+func (cmp *uploader) Upload(c *gin.Context) (medias []map[string]any, err error) {
 	ct := c.GetHeader("Content-Type")
 	if !strings.HasPrefix(ct, "multipart/form-data") {
 		return nil, errors.New(cons.UploadRequiresMultipart)
@@ -203,10 +209,31 @@ func (m *CoreMedia) Transform() *TransformCoreMedia {
 	return &transform
 }
 
+// transformMap applies CoreMedia.Transform to a core_media row returned as a
+// column map, so Upload responses carry the same path/thumb/banner/video_url/
+// mimetype/full_mimetype/type fields as a transformed CoreMedia.
+func transformMap(media map[string]any) map[string]any {
+	if media == nil {
+		return nil
+	}
+	path := lib.ToString(media["path"])
+	mimetype := lib.ToString(media["mimetype"])
+	t := (&CoreMedia{Path: &path, Mimetype: &mimetype}).Transform()
+
+	media["path"] = t.Path
+	media["mimetype"] = t.Mimetype
+	media["full_mimetype"] = t.FullMimetype
+	media["type"] = t.Type
+	media["thumb"] = t.Thumb
+	media["banner"] = t.Banner
+	media["video_url"] = t.VideoUrl
+	return media
+}
+
 // SaveFile writes a streamed upload to local storage and records it in
 // core_media. metadata uses the lowercase keys "filename", "size" and
 // "mimetype" (the gen.Metadata JSON names); "path" is set here.
-func (cmp *uploader) SaveFile(metadata map[string]any, data []byte) (*TransformCoreMedia, error) {
+func (cmp *uploader) SaveFile(metadata map[string]any, data []byte) (map[string]any, error) {
 	if metadata == nil || lib.IsEmpty(metadata["filename"]) {
 		return nil, errors.New(cons.NoFilesFound)
 	}
@@ -239,36 +266,37 @@ func (cmp *uploader) FilePath(filename string) (string, string, string) {
 }
 
 // _saveMedia records a file written by SaveFile (streamed uploads).
-func (cmp *uploader) _saveMedia(file map[string]any) (*TransformCoreMedia, error) {
+func (cmp *uploader) _saveMedia(file map[string]any) (map[string]any, error) {
 	return cmp._insertMedia(lib.ToString(file["filename"]), lib.ToInt32(file["size"]), lib.ToString(file["path"]), lib.ToString(file["mimetype"]))
 }
 
 // saveToMedia records a multipart upload once it has been written to disk/S3.
-func (cmp *uploader) saveToMedia(file *multipart.FileHeader, path string) (*TransformCoreMedia, error) {
+func (cmp *uploader) saveToMedia(file *multipart.FileHeader, path string) (map[string]any, error) {
 	mimetype := strings.Join(file.Header["Content-Type"], "")
 	return cmp._insertMedia(file.Filename, int32(file.Size), path, mimetype)
 }
 
-// _insertMedia inserts one core_media row (with a fresh guid) and returns it
-// transformed: full public path, thumb/banner for images, video_url for videos.
-func (cmp *uploader) _insertMedia(filename string, filesize int32, path, mimetype string) (*TransformCoreMedia, error) {
+// _insertMedia inserts one core_media row and returns it as a column map. Every
+// upload gets a fresh uuid path, so this is always a new row (the table's only
+// unique key is guid, which uploads don't set — an upsert would never match).
+func (cmp *uploader) _insertMedia(filename string, filesize int32, path, mimetype string) (map[string]any, error) {
 	now := time.Now().Unix()
-	guid := uuid.NewString()
-	sql := "INSERT INTO `core_media` (`guid`, `filename`, `filesize`, `path`, `mimetype`, `created_at`, `updated_at`) VALUES (?, ?, ?, ?, ?, ?, ?)"
-	if err := activerecord.Exec(sql, guid, filename, filesize, path, mimetype, now, now).Error; err != nil {
+	sql := "INSERT INTO `core_media` (`filename`, `filesize`, `path`, `mimetype`, `created_at`, `updated_at`) VALUES (?, ?, ?, ?, ?, ?)"
+	if err := activerecord.Exec(sql, filename, filesize, path, mimetype, now, now).Error; err != nil {
 		return nil, err
 	}
-	// Read the row back by its unique guid. LAST_INSERT_ID() isn't safe here:
-	// Exec and the next query can run on different pooled connections.
-	media := &CoreMedia{}
-	sql = "SELECT * FROM `core_media` WHERE `guid` = ? LIMIT 1"
-	if err := activerecord.Raw(sql, guid).Scan(media).Error; err != nil {
+	// Read the row back by its path (a fresh uuid per upload, so it matches
+	// only this insert). LAST_INSERT_ID() isn't safe here: Exec and the next
+	// query can run on different pooled connections.
+	var media map[string]any
+	sql = "SELECT * FROM `core_media` WHERE `path` = ? ORDER BY `id` DESC LIMIT 1"
+	if err := activerecord.Raw(sql, path).Scan(&media).Error; err != nil {
 		return nil, err
 	}
-	if media.Id == 0 {
+	if media == nil {
 		return nil, errors.New(cons.RecordNotFound)
 	}
-	return media.Transform(), nil
+	return media, nil
 }
 
 func (cmp *uploader) IsValidFile(file, arg string) error {

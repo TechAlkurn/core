@@ -7,10 +7,12 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
+	"unsafe"
 
 	coredb "github.com/TechAlkurn/core/db"
 	"github.com/TechAlkurn/core/db/hooks"
@@ -34,15 +36,16 @@ const (
 )
 
 var (
-	modelRegistry   = map[string]ModelFactory{}
-	registryMu      sync.RWMutex
-	pkSchemaCache   sync.Map // map[reflect.Type]map[string]string  — primary key schema per type
-	fieldTypeCache  sync.Map // map[reflect.Type]map[string]reflect.Type — field types per type
-	tableNameCache  sync.Map // map[reflect.Type]string — resolved table name per type
-	isDebugAtomic   atomic.Bool
-	isDebugResolved atomic.Bool  // false = never resolved; on first call we hit the DB
-	debugScopes     atomic.Int32 // open Debug() scopes; > 0 forces IsDebug() true
-	reqCache        sync.Map
+	modelRegistry     = map[string]ModelFactory{}
+	registryMu        sync.RWMutex
+	pkSchemaCache     sync.Map // map[reflect.Type]map[string]string  — primary key schema per type
+	fieldTypeCache    sync.Map // map[reflect.Type]map[string]reflect.Type — field types per type
+	tableNameCache    sync.Map // map[reflect.Type]string — resolved table name per type
+	tableNameInFlight sync.Map // map[uintptr]struct{} — embedded ActiveRecord addrs mid-TableName (recursion guard)
+	isDebugAtomic     atomic.Bool
+	isDebugResolved   atomic.Bool  // false = never resolved; on first call we hit the DB
+	debugScopes       atomic.Int32 // open Debug() scopes; > 0 forces IsDebug() true
+	reqCache          sync.Map
 )
 
 func RegisterModel[T any]() {
@@ -339,15 +342,56 @@ func (ar *ActiveRecord[T]) TableName() string {
 	if v, ok := tableNameCache.Load(t); ok {
 		return v.(string)
 	}
+	// Re-entered through T's promoted TableName (T embeds ActiveRecord[T] but
+	// declares no TableName of its own): fall back instead of recursing forever.
+	if _, busy := tableNameInFlight.Load(uintptr(unsafe.Pointer(ar))); busy {
+		return strings.ToLower(t.Name())
+	}
 	var model T
 	var name string
 	if tn, ok := any(&model).(interface{ TableName() string }); ok {
+		key := embeddedRecordAddr[T](&model)
+		if key != 0 {
+			tableNameInFlight.Store(key, struct{}{})
+		}
 		name = tn.TableName()
+		if key != 0 {
+			tableNameInFlight.Delete(key)
+		}
+		runtime.KeepAlive(&model)
 	} else {
 		name = strings.ToLower(t.Name())
 	}
 	tableNameCache.Store(t, name)
 	return name
+}
+
+// embeddedRecordAddr returns the address of the ActiveRecord[T] embedded in
+// *model (allocating it when embedded by nil pointer), or 0 when T doesn't
+// embed one. A promoted TableName call receives exactly this address.
+func embeddedRecordAddr[T any](model *T) uintptr {
+	v := reflect.ValueOf(model).Elem()
+	if v.Kind() != reflect.Struct {
+		return 0
+	}
+	arType := reflect.TypeFor[ActiveRecord[T]]()
+	for i := 0; i < v.NumField(); i++ {
+		f := v.Type().Field(i)
+		if !f.Anonymous {
+			continue
+		}
+		fv := v.Field(i)
+		switch {
+		case f.Type == arType && fv.CanAddr():
+			return fv.Addr().Pointer()
+		case f.Type == reflect.PointerTo(arType) && fv.CanSet():
+			if fv.IsNil() {
+				fv.Set(reflect.New(arType))
+			}
+			return fv.Pointer()
+		}
+	}
+	return 0
 }
 
 // Get returns the value of a struct field by name. Pointer fields are
