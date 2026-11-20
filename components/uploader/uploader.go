@@ -43,7 +43,7 @@ func storagePath() string {
 	if config.IsAwsS3 {
 		return os.Getenv("S3_CDN_STORAGEPATH")
 	}
-	config.Log.Printf("%v\n", os.Getenv("STORAGE_PATH"))
+	config.Log.Printf("STORAGE_PATH: %v\n", os.Getenv("STORAGE_PATH"))
 
 	return os.Getenv("STORAGE_PATH")
 }
@@ -183,6 +183,8 @@ func (m *CoreMedia) Transform() *TransformCoreMedia {
 	if p := m.GetPath(); p != "" {
 		transform.Path = fmt.Sprintf("%s/%s", storagePath(), p)
 	}
+
+	config.Log.Printf("transform.Path: %v\n", transform.Path)
 
 	full := m.GetMimetype()
 	if full == "" {
