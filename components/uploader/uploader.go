@@ -43,8 +43,6 @@ func storagePath() string {
 	if config.IsAwsS3 {
 		return os.Getenv("S3_CDN_STORAGEPATH")
 	}
-	config.Log.Printf("STORAGE_PATH: %v\n", os.Getenv("STORAGE_PATH"))
-
 	return os.Getenv("STORAGE_PATH")
 }
 
@@ -62,8 +60,7 @@ type CoreMedia struct {
 	UpdatedAt uint32  `gorm:"column:updated_at;type:int(11) unsigned;not null;autoCreateTime;autoUpdateTime;" json:"updated_at"`
 }
 
-// TableName must be declared here: without it the promoted
-// ActiveRecord.TableName is used, which resolved to "coremedia".
+// TableName pins the table; GORM's default naming would pick "core_medias".
 func (m *CoreMedia) TableName() string {
 	return "core_media"
 }
@@ -82,7 +79,7 @@ func (m *CoreMedia) GetMimetype() string {
 	return *m.Mimetype
 }
 
-type TransformCoreMedia struct {
+type Transform struct {
 	*CoreMedia
 	// Mimetype shadows CoreMedia.Mimetype with the top-level type ("image",
 	// "video", …) so the source row isn't mutated; FullMimetype keeps the rest.
@@ -170,11 +167,11 @@ func (cmp *uploader) Upload(c *gin.Context) (medias []map[string]any, err error)
 
 // Transform builds the API view of a core_media row: public path, thumb and
 // banner URLs for images, and video_url for videos.
-func (m *CoreMedia) Transform() *TransformCoreMedia {
+func (m *CoreMedia) Transform() *Transform {
 	if m == nil {
 		return nil
 	}
-	transform := TransformCoreMedia{
+	transform := Transform{
 		CoreMedia:    m,
 		Mimetype:     m.Mimetype,
 		FullMimetype: m.GetMimetype(),
@@ -182,9 +179,6 @@ func (m *CoreMedia) Transform() *TransformCoreMedia {
 	if p := m.GetPath(); p != "" {
 		transform.Path = fmt.Sprintf("%s/%s", storagePath(), p)
 	}
-
-	log.Printf("transform.Path: %v\n", transform.Path)
-
 	full := m.GetMimetype()
 	if full == "" {
 		return &transform
@@ -202,8 +196,14 @@ func (m *CoreMedia) Transform() *TransformCoreMedia {
 		thumbHeight := lib.ToInt(os.Getenv("THUMB_HEIGHT"))
 		bannerWidth := lib.ToInt(os.Getenv("BANNER_WIDTH"))
 		bannerHeight := lib.ToInt(os.Getenv("BANNER_HEIGHT"))
-		transform.Thumb = mediaimage.Thumb(m.GetPath(), thumbWidth, thumbHeight)
-		transform.Banner = mediaimage.Thumb(m.GetPath(), bannerWidth, bannerHeight)
+		if config.IsAwsS3 {
+			// _s3upload stores resized copies under these same cache keys.
+			_, transform.Thumb = lib.ThumbS3(m.GetPath(), thumbWidth, thumbHeight)
+			_, transform.Banner = lib.ThumbS3(m.GetPath(), bannerWidth, bannerHeight)
+		} else {
+			transform.Thumb = mediaimage.Thumb(m.GetPath(), thumbWidth, thumbHeight)
+			transform.Banner = mediaimage.Thumb(m.GetPath(), bannerWidth, bannerHeight)
+		}
 	}
 	if kind == cons.CORE_MEDIA_MIME_TYPE_VIDEO {
 		transform.VideoUrl = transform.Path
@@ -401,12 +401,11 @@ func (cmp *uploader) _s3upload(file multipart.File, fileHeader *multipart.FileHe
 	if width > 0 && height > 0 {
 		fileSizes = append(fileSizes, map[string]any{"w": width, "h": height, "f": fileName})
 	}
-	// Cache keys follow components/image.Thumb's "<name>-<w>-<h>.<ext>" naming
-	// so thumb and banner don't overwrite each other.
+	// Cache keys come from lib.ThumbS3 so the URLs Transform() returns point
+	// at exactly these objects (and thumb/banner don't overwrite each other).
 	cacheKey := func(w, h int) string {
-		ext := filepath.Ext(fileName)
-		name := strings.Replace(strings.TrimSuffix(fileName, ext), "storage", "cache", 1)
-		return fmt.Sprintf("%s-%d-%d%s", name, w, h, ext)
+		key, _ := lib.ThumbS3(baseName, w, h)
+		return key
 	}
 	thumbWidth := lib.ToInt(os.Getenv("THUMB_WIDTH"))
 	thumbHeight := lib.ToInt(os.Getenv("THUMB_HEIGHT"))

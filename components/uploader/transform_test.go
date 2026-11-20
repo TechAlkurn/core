@@ -1,7 +1,10 @@
 package uploader
 
 import (
+	"strings"
+
 	"encoding/json"
+	"github.com/TechAlkurn/core/lib"
 	"testing"
 )
 
@@ -19,5 +22,18 @@ func TestTransformMap(t *testing.T) {
 		if mt, _ := out["mimetype"].(*string); mt == nil || *mt != "video" {
 			t.Fatalf("mimetype: %s", b)
 		}
+	}
+}
+
+// The S3 key _s3upload writes must equal the key in the URL Transform returns.
+func TestS3ThumbKeyMatchesUpload(t *testing.T) {
+	cmp := &uploader{AwsS3: true}
+	fullPath, dir, name := cmp.FilePath("photo.jpg")
+	if fullPath+name != "uploads/storage/"+dir+name {
+		t.Fatalf("unexpected S3 key layout: %s", fullPath+name)
+	}
+	key, url := lib.ThumbS3(dir+name, 500, 600)
+	if !strings.HasSuffix(url, "/"+key) || !strings.HasPrefix(key, "uploads/cache/") || !strings.HasSuffix(key, "-500x600.jpg") {
+		t.Fatalf("key %q url %q", key, url)
 	}
 }
