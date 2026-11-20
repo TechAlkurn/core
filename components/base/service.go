@@ -158,6 +158,6 @@ func splitList(s string) []string {
 		if part = strings.TrimSpace(part); part != "" {
 			out = append(out, part)
 		}
-	}
+	} 
 	return out
 }
