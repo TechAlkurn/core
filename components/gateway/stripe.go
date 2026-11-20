@@ -75,6 +75,7 @@ type StripePayment interface {
 	StripePriceList() (result []*stripe.Price, err error)
 	StripeCreateAccount(in Request) (result *stripe.Account, err error)
 	StripeConnectedAccounts(in Request) (token *stripe.OAuthToken, err error)
+	RetrieveAccounts(primaryId string) (result *stripe.Account, err error)
 	StripeAccountDelete(primaryId string) (result *stripe.Account, err error)
 	GenerateQRCode(url string) error
 	StripeQR(amount, qty int64, url string, desc uint32) (result *stripe.PaymentLink, err error)
@@ -236,6 +237,30 @@ func (s *stripePayment) StripeAccountDelete(primaryId string) (result *stripe.Ac
 	params := &stripe.AccountParams{}
 	result, err = account.Del(primaryId, params)
 	return
+}
+
+// RetrieveAccounts fetches a connected account and confirms it is usable: the
+// id must look like a Stripe account id ("acct_..."), the account must exist,
+// must not be deleted, and Stripe must not have disabled it
+// (requirements.disabled_reason is set when Stripe blocks the account, e.g.
+// "rejected.fraud" or "requirements.past_due").
+func (s *stripePayment) RetrieveAccounts(primaryId string) (result *stripe.Account, err error) {
+	s.LoadStripeKey()
+	primaryId = strings.TrimSpace(primaryId)
+	if !strings.HasPrefix(primaryId, "acct_") {
+		return nil, errors.New(cons.InvalidAccountNumber)
+	}
+	result, err = account.GetByID(primaryId, &stripe.AccountParams{})
+	if err != nil {
+		return nil, err
+	}
+	if result == nil || lib.IsEmpty(result.ID) || result.Deleted {
+		return nil, errors.New(cons.InvalidAccountNumber)
+	}
+	if result.Requirements != nil && result.Requirements.DisabledReason != "" {
+		return nil, fmt.Errorf("stripe account %s is disabled: %s", result.ID, result.Requirements.DisabledReason)
+	}
+	return result, nil
 }
 
 func (s *stripePayment) StripeCharge(in Request) (result *stripe.Charge, err error) {
