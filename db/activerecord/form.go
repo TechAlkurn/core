@@ -1,7 +1,9 @@
 package activerecord
 
 import (
+	"bytes"
 	"context"
+	"database/sql/driver"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -32,21 +34,47 @@ var tableModelCache sync.Map // map[string]string — table name / struct name �
 //
 // Expected request shape:
 //
-//	query: ?primary_id=42                  (or "primary_id" in the form)
-//	form:  {"tablename": "user_profile", "data": {"first_name": "Ann"}}
+//	query: ?primary_id=42
+//	form:  {"tablename": "user_profile", "data": {"first_name": "Ann", "meta": {"a": 1}}}
 //
 // "tablename" may be the DB table name or the Go struct name, and must belong
 // to a model registered with RegisterModel — unregistered tables are refused,
-// so a client can't write to arbitrary tables. "data" may be a JSON object or
-// a JSON-encoded string. Keys are matched against the model's columns (DB
-// name or Go field name); unknown, primary-key and non-updatable columns are
-// dropped. The model's UpdateHooks run before the write, as in SaveDB.
+// so a client can't write to arbitrary tables.
+//
+// The row is identified by "primary_id", read from the query or the form:
+//   - a scalar (`primary_id=42`) when the model has a single primary key;
+//   - an object keyed by column or Go field name for composite keys, either
+//     in the form (`"primary_id": {"user_id": 1, "item_name": "admin"}`) or
+//     JSON-encoded in the query;
+//   - or, when "primary_id" is absent, one query/form param per key column
+//     (`?user_id=1&item_name=admin`).
+//
+// Every primary-key column must be given.
+//
+// "data" may be a JSON object or a JSON-encoded string. Keys are matched
+// against the model's columns (DB name or Go field name); unknown,
+// primary-key and non-updatable columns are dropped. Nested objects/arrays
+// are converted for the column's Go type (see columnValue). The model's
+// UpdateHooks run before the write, as in SaveDB.
 //
 // Pass a transaction to run the update inside it.
+/*
+┌────────────────────────────────────────────────────────────────┬─────────────────────────────────────────────────────────────┐
+│                            Request                             │                             Use                             │
+├────────────────────────────────────────────────────────────────┼─────────────────────────────────────────────────────────────┤
+│ ?primary_id=42 or "primary_id": 42 in the form                 │ single-column key (works as before)                         │
+├────────────────────────────────────────────────────────────────┼─────────────────────────────────────────────────────────────┤
+│ "primary_id": {"user_id": 1, "item_name": "admin"} in the form │ composite key; names can be the column or the Go field name │
+├────────────────────────────────────────────────────────────────┼─────────────────────────────────────────────────────────────┤
+│ ?primary_id={"user_id":1,"item_name":"admin"} (URL-encoded)    │ composite key in the query                                  │
+├────────────────────────────────────────────────────────────────┼─────────────────────────────────────────────────────────────┤
+│ ?user_id=1&item_name=admin, with no primary_id                 │ one parameter per key column                                │
+└────────────────────────────────────────────────────────────────┴─────────────────────────────────────────────────────────────┘
+*/
 func UpdateFormDB(in FormRequest, tx ...*gorm.DB) (any, error) {
-	form := lib.ToMapped(in.GetForm())
-	if form == nil {
-		return nil, errors.New("UpdateFormDB: invalid form")
+	form, err := decodeForm(in.GetForm())
+	if err != nil {
+		return nil, err
 	}
 
 	tablename := strings.TrimSpace(lib.ToString(form["tablename"]))
@@ -58,12 +86,14 @@ func UpdateFormDB(in FormRequest, tx ...*gorm.DB) (any, error) {
 		return nil, err
 	}
 
-	primaryID := queryParam(in.GetQuery(), "primary_id")
-	if primaryID == "" {
-		primaryID = strings.TrimSpace(lib.ToString(form["primary_id"]))
+	sch, err := parseSchema(model)
+	if err != nil {
+		return nil, fmt.Errorf("UpdateFormDB[%s]: %w", tablename, err)
 	}
-	if primaryID == "" {
-		return nil, errors.New("UpdateFormDB: primary_id is required")
+
+	pk, err := primaryKeyFromRequest(sch, in.GetQuery(), form)
+	if err != nil {
+		return nil, fmt.Errorf("UpdateFormDB[%s]: %w", tablename, err)
 	}
 
 	data, err := formData(form["data"])
@@ -71,32 +101,26 @@ func UpdateFormDB(in FormRequest, tx ...*gorm.DB) (any, error) {
 		return nil, err
 	}
 
-	sch, err := parseSchema(model)
-	if err != nil {
-		return nil, fmt.Errorf("UpdateFormDB[%s]: %w", tablename, err)
-	}
-	if len(sch.PrimaryFields) != 1 {
-		return nil, fmt.Errorf("UpdateFormDB[%s]: model must have exactly one primary key", tablename)
-	}
-	pkCol := sch.PrimaryFields[0].DBName
-
 	attrs := make(map[string]any, len(data))
 	for key, val := range data {
 		f := sch.LookUpField(key)
 		if f == nil || f.PrimaryKey || !f.Updatable || f.DBName == "" {
 			continue
 		}
-		attrs[f.DBName] = val
+		v, err := columnValue(f, val)
+		if err != nil {
+			return nil, fmt.Errorf("UpdateFormDB[%s]: %w", tablename, err)
+		}
+		attrs[f.DBName] = v
 	}
 	if len(attrs) == 0 {
 		return nil, fmt.Errorf("UpdateFormDB[%s]: no updatable fields in data", tablename)
 	}
 
 	db := DB(tx...)
-	where := fmt.Sprintf("`%s` = ?", pkCol)
-	if err := db.Where(where, primaryID).First(model).Error; err != nil {
+	if err := db.Where(pk).First(model).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, fmt.Errorf("UpdateFormDB[%s]: record %s not found", tablename, primaryID)
+			return nil, fmt.Errorf("UpdateFormDB[%s]: record %v not found", tablename, pk)
 		}
 		return nil, err
 	}
@@ -116,10 +140,173 @@ func UpdateFormDB(in FormRequest, tx ...*gorm.DB) (any, error) {
 	}
 
 	fresh := reflect.New(modelType).Interface()
-	if err := db.Where(where, primaryID).First(fresh).Error; err != nil {
+	if err := db.Where(pk).First(fresh).Error; err != nil {
 		return nil, err
 	}
 	return fresh, nil
+}
+
+// decodeForm decodes the request form with UseNumber so large integer IDs
+// keep full precision instead of passing through float64.
+func decodeForm(b []byte) (map[string]any, error) {
+	var form map[string]any
+	dec := json.NewDecoder(bytes.NewReader(b))
+	dec.UseNumber()
+	if err := dec.Decode(&form); err != nil || form == nil {
+		return nil, errors.New("UpdateFormDB: invalid form")
+	}
+	return form, nil
+}
+
+// primaryKeyFromRequest builds a column → value map covering every primary
+// key column of sch, from "primary_id" (scalar or object) or from one param
+// per key column. See UpdateFormDB for the accepted shapes.
+func primaryKeyFromRequest(sch *schema.Schema, rawQuery string, form map[string]any) (map[string]any, error) {
+	if len(sch.PrimaryFields) == 0 {
+		return nil, errors.New("model has no primary key")
+	}
+	query, _ := url.ParseQuery(strings.TrimPrefix(rawQuery, "?")) // keeps well-formed pairs on error
+
+	var raw any
+	if v := strings.TrimSpace(query.Get("primary_id")); v != "" {
+		raw = v
+	} else if v, ok := form["primary_id"]; ok && !isBlank(v) {
+		raw = v
+	}
+
+	// A JSON object given as a string (typically from the query).
+	if s, ok := raw.(string); ok && strings.HasPrefix(s, "{") {
+		obj := map[string]any{}
+		dec := json.NewDecoder(strings.NewReader(s))
+		dec.UseNumber()
+		if err := dec.Decode(&obj); err != nil {
+			return nil, fmt.Errorf("primary_id is not a valid JSON object: %w", err)
+		}
+		raw = obj
+	}
+
+	pk := make(map[string]any, len(sch.PrimaryFields))
+	switch v := raw.(type) {
+	case nil:
+		// No primary_id: one param per key column, query first, then form.
+		for _, f := range sch.PrimaryFields {
+			if qv := strings.TrimSpace(query.Get(f.DBName)); qv != "" {
+				pk[f.DBName] = qv
+			} else if fv, ok := form[f.DBName]; ok && !isBlank(fv) {
+				pk[f.DBName] = fv
+			}
+		}
+		if len(pk) == 0 {
+			return nil, errors.New("primary_id is required")
+		}
+	case map[string]any:
+		for key, val := range v {
+			f := sch.LookUpField(key)
+			if f == nil || !f.PrimaryKey {
+				return nil, fmt.Errorf("primary_id: %q is not a primary key column", key)
+			}
+			if isBlank(val) {
+				return nil, fmt.Errorf("primary_id: %q is empty", key)
+			}
+			if _, nested := val.(map[string]any); nested {
+				return nil, fmt.Errorf("primary_id: %q must be a scalar", key)
+			}
+			if _, nested := val.([]any); nested {
+				return nil, fmt.Errorf("primary_id: %q must be a scalar", key)
+			}
+			pk[f.DBName] = val
+		}
+	case []any:
+		return nil, errors.New("primary_id must be a scalar or an object")
+	default:
+		if len(sch.PrimaryFields) != 1 {
+			return nil, fmt.Errorf("primary_id: composite key %s needs an object, e.g. {%q: ...}",
+				pkColumns(sch), sch.PrimaryFields[0].DBName)
+		}
+		pk[sch.PrimaryFields[0].DBName] = v
+	}
+
+	for _, f := range sch.PrimaryFields {
+		if _, ok := pk[f.DBName]; !ok {
+			return nil, fmt.Errorf("primary_id: missing key column %q (key is %s)", f.DBName, pkColumns(sch))
+		}
+	}
+	return pk, nil
+}
+
+func pkColumns(sch *schema.Schema) string {
+	cols := make([]string, len(sch.PrimaryFields))
+	for i, f := range sch.PrimaryFields {
+		cols[i] = f.DBName
+	}
+	return "(" + strings.Join(cols, ", ") + ")"
+}
+
+func isBlank(v any) bool {
+	if v == nil {
+		return true
+	}
+	if s, ok := v.(string); ok {
+		return strings.TrimSpace(s) == ""
+	}
+	return false
+}
+
+var valuerType = reflect.TypeFor[driver.Valuer]()
+
+// columnValue prepares one "data" value for a map-based Updates. Scalars pass
+// through unchanged. Nested objects/arrays (map[string]any / []any) are
+// converted according to the column's Go type, since GORM's map Updates
+// sends map values to the driver as-is and never runs field serializers:
+//
+//   - types implementing driver.Valuer (datatypes.JSON, custom JSON types):
+//     decoded into that type, so its Value() produces the stored form;
+//   - []byte / json.RawMessage: the JSON bytes;
+//   - string, `serializer:json` fields and plain struct/map/slice fields
+//     (JSON columns): the JSON text, after checking it decodes into the
+//     field's Go type so a shape mismatch is reported instead of stored.
+func columnValue(f *schema.Field, val any) (any, error) {
+	switch val.(type) {
+	case map[string]any, []any:
+	default:
+		return val, nil
+	}
+	raw, err := json.Marshal(val)
+	if err != nil {
+		return nil, fmt.Errorf("data.%s: %w", f.DBName, err)
+	}
+
+	target := f.FieldType
+	for target.Kind() == reflect.Pointer {
+		target = target.Elem()
+	}
+
+	if f.Serializer == nil && (target.Implements(valuerType) || reflect.PointerTo(target).Implements(valuerType)) {
+		ptr := reflect.New(target)
+		if err := json.Unmarshal(raw, ptr.Interface()); err != nil {
+			return nil, fmt.Errorf("data.%s: %w", f.DBName, err)
+		}
+		if target.Implements(valuerType) {
+			return ptr.Elem().Interface(), nil
+		}
+		return ptr.Interface(), nil
+	}
+
+	switch {
+	case target.Kind() == reflect.Slice && target.Elem().Kind() == reflect.Uint8:
+		return raw, nil
+	case target.Kind() == reflect.String:
+		return string(raw), nil
+	case target.Kind() == reflect.Struct, target.Kind() == reflect.Map,
+		target.Kind() == reflect.Slice, target.Kind() == reflect.Array,
+		target.Kind() == reflect.Interface:
+		if err := json.Unmarshal(raw, reflect.New(target).Interface()); err != nil {
+			return nil, fmt.Errorf("data.%s: %w", f.DBName, err)
+		}
+		return string(raw), nil
+	default:
+		return nil, fmt.Errorf("data.%s: column of type %s can't hold an object or array", f.DBName, f.FieldType)
+	}
 }
 
 // modelForTable returns a new *T for the registered model whose table name or
@@ -174,7 +361,9 @@ func formData(v any) (map[string]any, error) {
 		return d, nil
 	case string:
 		var m map[string]any
-		if err := json.Unmarshal([]byte(d), &m); err != nil {
+		dec := json.NewDecoder(strings.NewReader(d))
+		dec.UseNumber()
+		if err := dec.Decode(&m); err != nil {
 			return nil, fmt.Errorf("UpdateFormDB: data is not a JSON object: %w", err)
 		}
 		return m, nil
@@ -183,10 +372,4 @@ func formData(v any) (map[string]any, error) {
 	default:
 		return nil, fmt.Errorf("UpdateFormDB: data must be an object, got %T", v)
 	}
-}
-
-func queryParam(rawQuery, key string) string {
-	// ParseQuery keeps every well-formed pair even when it returns an error.
-	vals, _ := url.ParseQuery(strings.TrimPrefix(rawQuery, "?"))
-	return strings.TrimSpace(vals.Get(key))
 }
