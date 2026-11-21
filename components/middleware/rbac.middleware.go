@@ -31,6 +31,7 @@ package middleware
 import (
 	"errors"
 	"net/http"
+	"slices"
 	"strings"
 
 	"github.com/TechAlkurn/core/components/rbac"
@@ -157,4 +158,17 @@ func candidateNames(prefix, key, method string) []string {
 		out = append(out, key+":"+method, key)
 	}
 	return out
+}
+
+// requireLogin enforces FrontendMiddleware's token check only for the given
+// keys; requests for any other key pass straight through.
+func RequireLogin(keys ...string) gin.HandlerFunc {
+	auth := FrontendMiddleware()
+	return func(c *gin.Context) {
+		if slices.Contains(keys, c.Query("key")) {
+			auth(c) // aborts without a valid token, otherwise calls c.Next()
+			return
+		}
+		c.Next()
+	}
 }
