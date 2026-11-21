@@ -17,7 +17,7 @@ import (
 	"gorm.io/gorm/schema"
 )
 
-// FormRequest is the slice of the host's gRPC *Request that UpdateFormData
+// FormRequest is the slice of the host's gRPC *Request that UpdateFormDB
 // needs. Any generated proto message with Query/Form fields satisfies it, so
 // this package never imports the host's protos.
 type FormRequest interface {
@@ -27,7 +27,7 @@ type FormRequest interface {
 
 var tableModelCache sync.Map // map[string]string — table name / struct name → registry key
 
-// UpdateFormData updates one row of a registered model from a generic form
+// UpdateFormDB updates one row of a registered model from a generic form
 // request and returns the reloaded model (a *T as any).
 //
 // Expected request shape:
@@ -46,12 +46,12 @@ var tableModelCache sync.Map // map[string]string — table name / struct name �
 func UpdateFormDB(in FormRequest, tx ...*gorm.DB) (any, error) {
 	form := lib.ToMapped(in.GetForm())
 	if form == nil {
-		return nil, errors.New("UpdateFormData: invalid form")
+		return nil, errors.New("UpdateFormDB: invalid form")
 	}
 
 	tablename := strings.TrimSpace(lib.ToString(form["tablename"]))
 	if tablename == "" {
-		return nil, errors.New("UpdateFormData: tablename is required")
+		return nil, errors.New("UpdateFormDB: tablename is required")
 	}
 	model, err := modelForTable(tablename)
 	if err != nil {
@@ -63,7 +63,7 @@ func UpdateFormDB(in FormRequest, tx ...*gorm.DB) (any, error) {
 		primaryID = strings.TrimSpace(lib.ToString(form["primary_id"]))
 	}
 	if primaryID == "" {
-		return nil, errors.New("UpdateFormData: primary_id is required")
+		return nil, errors.New("UpdateFormDB: primary_id is required")
 	}
 
 	data, err := formData(form["data"])
@@ -73,10 +73,10 @@ func UpdateFormDB(in FormRequest, tx ...*gorm.DB) (any, error) {
 
 	sch, err := parseSchema(model)
 	if err != nil {
-		return nil, fmt.Errorf("UpdateFormData[%s]: %w", tablename, err)
+		return nil, fmt.Errorf("UpdateFormDB[%s]: %w", tablename, err)
 	}
 	if len(sch.PrimaryFields) != 1 {
-		return nil, fmt.Errorf("UpdateFormData[%s]: model must have exactly one primary key", tablename)
+		return nil, fmt.Errorf("UpdateFormDB[%s]: model must have exactly one primary key", tablename)
 	}
 	pkCol := sch.PrimaryFields[0].DBName
 
@@ -89,14 +89,14 @@ func UpdateFormDB(in FormRequest, tx ...*gorm.DB) (any, error) {
 		attrs[f.DBName] = val
 	}
 	if len(attrs) == 0 {
-		return nil, fmt.Errorf("UpdateFormData[%s]: no updatable fields in data", tablename)
+		return nil, fmt.Errorf("UpdateFormDB[%s]: no updatable fields in data", tablename)
 	}
 
 	db := DB(tx...)
 	where := fmt.Sprintf("`%s` = ?", pkCol)
 	if err := db.Where(where, primaryID).First(model).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, fmt.Errorf("UpdateFormData[%s]: record %s not found", tablename, primaryID)
+			return nil, fmt.Errorf("UpdateFormDB[%s]: record %s not found", tablename, primaryID)
 		}
 		return nil, err
 	}
@@ -112,7 +112,7 @@ func UpdateFormDB(in FormRequest, tx ...*gorm.DB) (any, error) {
 
 	if err := db.Model(model).Updates(attrs).Error; err != nil {
 		logLockWaitDiagnostics(err)
-		return nil, fmt.Errorf("UpdateFormData[%s]: %w", tablename, err)
+		return nil, fmt.Errorf("UpdateFormDB[%s]: %w", tablename, err)
 	}
 
 	fresh := reflect.New(modelType).Interface()
@@ -154,7 +154,7 @@ func modelForTable(name string) (any, error) {
 		tableModelCache.Store(name, key)
 		return m, nil
 	}
-	return nil, fmt.Errorf("UpdateFormData: unknown table %q", name)
+	return nil, fmt.Errorf("UpdateFormDB: unknown table %q", name)
 }
 
 // parseSchema parses model with GORM (which caches the schema per type) so
@@ -175,13 +175,13 @@ func formData(v any) (map[string]any, error) {
 	case string:
 		var m map[string]any
 		if err := json.Unmarshal([]byte(d), &m); err != nil {
-			return nil, fmt.Errorf("UpdateFormData: data is not a JSON object: %w", err)
+			return nil, fmt.Errorf("UpdateFormDB: data is not a JSON object: %w", err)
 		}
 		return m, nil
 	case nil:
-		return nil, errors.New("UpdateFormData: data is required")
+		return nil, errors.New("UpdateFormDB: data is required")
 	default:
-		return nil, fmt.Errorf("UpdateFormData: data must be an object, got %T", v)
+		return nil, fmt.Errorf("UpdateFormDB: data must be an object, got %T", v)
 	}
 }
 
