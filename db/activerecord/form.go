@@ -43,7 +43,7 @@ var tableModelCache sync.Map // map[string]string â€” table name / struct name â
 // dropped. The model's UpdateHooks run before the write, as in SaveDB.
 //
 // Pass a transaction to run the update inside it.
-func UpdateFormData(in FormRequest, tx ...*gorm.DB) (any, error) {
+func UpdateFormDB(in FormRequest, tx ...*gorm.DB) (any, error) {
 	form := lib.ToMapped(in.GetForm())
 	if form == nil {
 		return nil, errors.New("UpdateFormData: invalid form")
