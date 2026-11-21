@@ -160,15 +160,67 @@ func candidateNames(prefix, key, method string) []string {
 	return out
 }
 
-// requireLogin enforces FrontendMiddleware's token check only for the given
-// keys; requests for any other key pass straight through.
-func RequireLogin(keys ...string) gin.HandlerFunc {
+// RequireLogin runs FrontendMiddleware's token check for the selected
+// ?key= values and lets every other request straight through. params picks
+// the keys:
+//
+//	RequireLogin(nil)                                       // every key needs login
+//	RequireLogin(map[string]any{"skip": []string{"list"}})  // all keys except "list"
+//	RequireLogin(map[string]any{"required": []string{"save", "delete"}})
+//	                                                        // only "save" and "delete"
+//	RequireLogin(map[string]any{"required": []string{"save", "list"}, "skip": []string{"list"}})
+//	                                                        // "save" only — skip wins
+//
+// With "required" set, only those keys are checked; without it, every key
+// is. Keys in "skip" are never checked. The lists may be []string or []any
+// (as decoded from JSON).
+/*
+┌──────────────────────────────────────────┬────────────────────────────────────────────────────┐
+│                  params                  │          Which ?key= values need a login           │
+├──────────────────────────────────────────┼────────────────────────────────────────────────────┤
+│ nil                                      │ every key                                          │
+├──────────────────────────────────────────┼────────────────────────────────────────────────────┤
+│ {"skip": []string{"list"}}               │ every key except list                              │
+├──────────────────────────────────────────┼────────────────────────────────────────────────────┤
+│ {"required": []string{"save", "delete"}} │ only save and delete                               │
+├──────────────────────────────────────────┼────────────────────────────────────────────────────┤
+│ both set                                 │ the required keys, minus any that are also in skip │
+└──────────────────────────────────────────┴────────────────────────────────────────────────────┘
+*/
+func RequireLogin(params map[string]any) gin.HandlerFunc {
 	auth := FrontendMiddleware()
+	required, hasRequired := stringList(params, "required")
+	skip, _ := stringList(params, "skip")
 	return func(c *gin.Context) {
-		if slices.Contains(keys, c.Query("key")) {
-			auth(c) // aborts without a valid token, otherwise calls c.Next()
+		key := c.Query("key")
+		if slices.Contains(skip, key) || (hasRequired && !slices.Contains(required, key)) {
+			c.Next()
 			return
 		}
-		c.Next()
+		auth(c) // aborts without a valid token, otherwise calls c.Next()
+	}
+}
+
+// stringList reads params[name] as a list of strings. ok reports whether
+// the entry was present at all, so an explicit empty "required" list still
+// means "no key requires login".
+func stringList(params map[string]any, name string) (list []string, ok bool) {
+	v, ok := params[name]
+	if !ok || v == nil {
+		return nil, ok && v != nil
+	}
+	switch l := v.(type) {
+	case []string:
+		return l, true
+	case []any:
+		out := make([]string, 0, len(l))
+		for _, s := range l {
+			out = append(out, lib.ToString(s))
+		}
+		return out, true
+	case string:
+		return []string{l}, true
+	default:
+		panic("middleware.RequireLogin: params[\"" + name + "\"] must be []string")
 	}
 }
