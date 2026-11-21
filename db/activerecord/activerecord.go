@@ -633,9 +633,11 @@ func (ar *ActiveRecord[T]) Create(attributes any, tx ...*gorm.DB) (*T, error) {
 	if err := DB(tx...).Create(&model).Error; err != nil {
 		return nil, err
 	}
-	/* if fn, ok := hooks.AfterSave[reflect.TypeFor[T]()]; ok {
-		fn(&model)
-	} */
+	/*
+		if fn, ok := hooks.AfterSave[reflect.TypeFor[T]()]; ok {
+			fn(&model)
+		}
+	*/
 	return &model, nil
 }
 
