@@ -14,6 +14,7 @@ const (
 	AuthorizationCodeRequired  = "authorization code is required"
 	LoginSessionNotValid       = "login session is not valid"
 	TooManyFailedLoginAttempts = "too many failed login attempts. try again in %d minutes"
+	UserNotFound               = "user not found"
 
 	// ── Token / session ───────────────────────────────────────────
 	ErrInvalidToken        = "Invalid Token"
@@ -38,6 +39,21 @@ const (
 	PaymentDeclined          = "error! the payment has been declined"
 	SubscriptionDeclined     = "sorry! The subscription has declined to process, please try again later"
 	NoSubscriptionDetail     = "sorry! no subscription detail"
+	InvalidPrimaryId         = "invalid primary id"
+	InvalidPaymentResponse   = "invalid payment response"
+	InvalidSubscriptionId    = "invalid subscription Id"
+	InvalidReaderId          = "invalid reader id"
+	InvalidLocation          = "invalid location"
+	InvalidRegistrationCode  = "invalid Registration Code"
+	InvalidPlink             = "invalid plink"
+	InvalidTerminationDate   = "Termination Date is not valid"
+	AdyenTokenIssue          = "You have issue with adyen token"
+	PlanNotFound             = "plan not found"
+	PlanNotValid             = "plan is not valid"
+	PaymentIntentNotPaid     = "the payment has not been completed"
+	PaymentIntentUsed        = "this payment has already been used"
+	PaymentAmountMismatch    = "the payment amount does not match the selected plan"
+	AccountNotFound          = "account not found"
 
 	// ── Upload ────────────────────────────────────────────────────
 	UnSupportedFileFormat   = "Unsupported image format"

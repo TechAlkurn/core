@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/TechAlkurn/core/components/base"
 	"github.com/TechAlkurn/core/cons"
 
 	"github.com/TechAlkurn/core/config"
@@ -23,6 +24,7 @@ import (
 	"github.com/stripe/stripe-go/v79/charge"
 	"github.com/stripe/stripe-go/v79/checkout/session"
 	"github.com/stripe/stripe-go/v79/customer"
+	"github.com/stripe/stripe-go/v79/invoice"
 	"github.com/stripe/stripe-go/v79/oauth"
 	"github.com/stripe/stripe-go/v79/paymentintent"
 	"github.com/stripe/stripe-go/v79/paymentlink"
@@ -65,6 +67,7 @@ type StripePayment interface {
 	RemoveSource(sourceId, customerId string) (result *stripe.Card, err error)
 	StripeTransfers(amount int64, accountNumber string) (result *stripe.Transfer, err error)
 	StripeCreateSubscription(in Request) (result *stripe.Subscription, err error)
+	StripeCreateSubscriptionByPaymentIntent(in Request, stripePriceId, paymentIntentId string) (result *stripe.Subscription, err error)
 	StripeSubscriptionUpdate(in Request) (result *stripe.Subscription, err error)
 	StripeSubscriptionCancel(subscriptionId string) (result *stripe.Subscription, err error)
 	StripeSubscriptionCancelAtPeriodEnd(subscriptionId string) (result *stripe.Subscription, err error)
@@ -105,6 +108,8 @@ type StripePayment interface {
 type stripePayment struct {
 	Key string
 }
+
+const piMetaSubscription = "membership_subscription_id"
 
 /*
 source (string):
@@ -759,6 +764,192 @@ func (s *stripePayment) StripeRefund(paymentId string, amount int64) (result *st
 		return nil, err
 	}
 	return result, nil
+}
+
+func (s *stripePayment) StripeCreateSubscriptionByPaymentIntent(in Request, stripePriceId, paymentIntentId string) (result *stripe.Subscription, err error) {
+	s.LoadStripeKey() // loads stripe.Key
+	stripePriceId = strings.TrimSpace(stripePriceId)
+	paymentIntentId = strings.TrimSpace(paymentIntentId)
+	if stripePriceId == "" {
+		return nil, errors.New(cons.PlanNotValid)
+	}
+	if !strings.HasPrefix(paymentIntentId, "pi_") {
+		return nil, errors.New(cons.InvalidPaymentIntent)
+	}
+	params := &stripe.PaymentIntentParams{}
+	params.AddExpand("invoice")
+	params.AddExpand("payment_method")
+	pi, err := paymentintent.Get(paymentIntentId, params)
+	if err != nil {
+		return nil, err
+	}
+	if !lib.IsEmpty(pi.Metadata[piMetaSubscription]) {
+		return nil, errors.New(cons.PaymentIntentUsed)
+	}
+	// A PaymentIntent tagged for another user must not buy this user a plan.
+	if owner := pi.Metadata["user_id"]; owner != "" && owner != lib.ToString(reqctx.UserID()) {
+		return nil, errors.New(cons.PaymentIntentUsed)
+	}
+
+	var sub *stripe.Subscription
+	if pi.Invoice != nil && pi.Invoice.Subscription != nil {
+		sub, err = s._subscriptionFromInvoiceIntent(pi, stripePriceId)
+	} else {
+		sub, err = s._subscriptionPaidByIntent(in, pi, stripePriceId)
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	mark := &stripe.PaymentIntentParams{}
+	mark.AddMetadata(piMetaSubscription, sub.ID)
+	mark.AddMetadata("user_id", lib.ToString(reqctx.UserID()))
+	if _, err := paymentintent.Update(pi.ID, mark); err != nil {
+		config.Log.Println("membership: could not mark payment intent", pi.ID, "as used:", err)
+	}
+	return sub, nil
+}
+
+// _subscriptionFromInvoiceIntent adopts the subscription whose first invoice
+// the client paid with this PaymentIntent.
+func (s *stripePayment) _subscriptionFromInvoiceIntent(pi *stripe.PaymentIntent, stripePriceId string) (*stripe.Subscription, error) {
+	if pi.Status != stripe.PaymentIntentStatusSucceeded {
+		return nil, errors.New(cons.PaymentIntentNotPaid)
+	}
+	sub, err := subscription.Get(pi.Invoice.Subscription.ID, nil)
+	if err != nil {
+		return nil, err
+	}
+	if !_subscriptionHasPrice(sub, stripePriceId) {
+		return nil, errors.New(cons.PlanNotValid)
+	}
+	// The PaymentIntent and the subscription must belong to the same customer,
+	// and an ended subscription can't be adopted.
+	if pi.Customer != nil && sub.Customer != nil && pi.Customer.ID != sub.Customer.ID {
+		return nil, errors.New(cons.PaymentIntentUsed)
+	}
+	if owner := sub.Metadata["user_id"]; owner != "" && owner != lib.ToString(reqctx.UserID()) {
+		return nil, errors.New(cons.PaymentIntentUsed)
+	}
+	if sub.Status == stripe.SubscriptionStatusCanceled || sub.Status == stripe.SubscriptionStatusIncompleteExpired {
+		return nil, errors.New(cons.SubscriptionDeclined)
+	}
+	return sub, nil
+}
+
+// _subscriptionPaidByIntent creates a subscription whose first invoice is
+// settled by a standalone PaymentIntent. The card is saved on the customer
+// so Stripe can charge it for renewals.
+func (s *stripePayment) _subscriptionPaidByIntent(in Request, pi *stripe.PaymentIntent, stripePriceId string) (*stripe.Subscription, error) {
+	if pi.Status != stripe.PaymentIntentStatusSucceeded && pi.Status != stripe.PaymentIntentStatusRequiresCapture {
+		return nil, errors.New(cons.PaymentIntentNotPaid)
+	}
+	if pi.PaymentMethod == nil {
+		return nil, errors.New(cons.PaymentDeclined)
+	}
+
+	customerId := ""
+	if pi.Customer != nil {
+		customerId = pi.Customer.ID
+	}
+	if lib.IsEmpty(customerId) {
+		// Scan needs a pointer: Scan(user) on a nil map never fills it, so
+		// this path always failed with "user not found".
+		user := map[string]any{}
+		if err := activerecord.Raw("SELECT username, email FROM `user` WHERE id = ? LIMIT 1", reqctx.UserID()).Scan(&user).Error; err != nil {
+			return nil, err
+		}
+		if len(user) == 0 {
+			return nil, errors.New(cons.UserNotFound)
+		}
+		var name, email string
+		if item, ok := user["username"]; ok {
+			name = lib.ToString(item)
+		}
+		if item, ok := user["email"]; ok {
+			email = lib.ToString(item)
+		}
+		cus, err := s.CreateCustomers(name, email, nil)
+		if err != nil {
+			return nil, err
+		}
+		customerId = cus.ID
+	}
+
+	// Save the card for renewals. Stripe refuses this for a card that was
+	// used without a customer and without setup_future_usage; the first
+	// period is still paid, but renewals will need a new card.
+	pmId := pi.PaymentMethod.ID
+	if pi.PaymentMethod.Customer == nil || pi.PaymentMethod.Customer.ID != customerId {
+		if _, err := paymentmethod.Attach(pmId, &stripe.PaymentMethodAttachParams{Customer: stripe.String(customerId)}); err != nil {
+			config.Log.Println("membership: card from", pi.ID, "not saved for renewals:", err)
+			pmId = ""
+		}
+	}
+
+	params := &stripe.SubscriptionParams{
+		Customer:        stripe.String(customerId),
+		Items:           []*stripe.SubscriptionItemsParams{{Price: stripe.String(stripePriceId)}},
+		PaymentBehavior: stripe.String("default_incomplete"),
+	}
+	if !lib.IsEmpty(pmId) {
+		params.DefaultPaymentMethod = stripe.String(pmId)
+	}
+	// reqFrm := lib.ToMapped(in.GetForm())
+	if reqFrm := base.ToMapped(in.GetForm()); reqFrm.Has("coupon") && !lib.IsEmpty(reqFrm.ToString("coupon")) {
+		params.Coupon = stripe.String(reqFrm.ToString("coupon"))
+	}
+	params.AddMetadata("user_id", lib.ToString(reqctx.UserID()))
+	params.AddMetadata("payment_intent_id", pi.ID)
+	params.AddExpand("latest_invoice")
+	sub, err := subscription.New(params)
+	if err != nil {
+		return nil, err
+	}
+	cancel := func() {
+		if _, cErr := subscription.Cancel(sub.ID, nil); cErr != nil {
+			config.Log.Println("membership: could not cancel unpaid subscription", sub.ID, ":", cErr)
+		}
+	}
+
+	inv := sub.LatestInvoice
+	if inv == nil {
+		cancel()
+		return nil, errors.New(cons.SubscriptionDeclined)
+	}
+	// The payment must cover the first invoice (after coupon and tax).
+	if inv.Currency != pi.Currency || pi.Amount < inv.AmountDue {
+		cancel()
+		return nil, errors.New(cons.PaymentAmountMismatch)
+	}
+	if pi.Status == stripe.PaymentIntentStatusRequiresCapture {
+		if _, err := paymentintent.Capture(pi.ID, nil); err != nil {
+			cancel()
+			return nil, err
+		}
+	}
+	if inv.AmountDue > 0 && inv.Status != stripe.InvoiceStatusPaid {
+		if _, err := invoice.Pay(inv.ID, &stripe.InvoicePayParams{PaidOutOfBand: stripe.Bool(true)}); err != nil {
+			// The money is already taken: keep the subscription and log
+			// enough to reconcile it by hand.
+			config.Log.Println("membership: payment", pi.ID, "captured but invoice", inv.ID, "not marked paid:", err)
+			return nil, err
+		}
+	}
+	// Re-read so the status reflects the paid invoice (active / trialing).
+	return subscription.Get(sub.ID, nil)
+}
+
+func _subscriptionHasPrice(sub *stripe.Subscription, stripePriceId string) bool {
+	if sub == nil || sub.Items == nil {
+		return false
+	}
+	for _, item := range sub.Items.Data {
+		if item.Price != nil && item.Price.ID == stripePriceId {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *stripePayment) StripeCreateSubscription(in Request) (result *stripe.Subscription, err error) {
