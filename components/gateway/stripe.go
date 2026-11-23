@@ -810,11 +810,36 @@ func (s *stripePayment) StripeCreateSubscriptionByPaymentIntent(in Request, stri
 	return sub, nil
 }
 
+// paymentIntentNotPaid says why a PaymentIntent can't pay for a membership,
+// using Stripe's own status so the client knows what step is missing.
+func paymentIntentNotPaid(pi *stripe.PaymentIntent) error {
+	var hint string
+	switch pi.Status {
+	case stripe.PaymentIntentStatusRequiresPaymentMethod:
+		hint = "no card has been added, or the last card was declined"
+	case stripe.PaymentIntentStatusRequiresConfirmation:
+		hint = "the payment has not been confirmed"
+	case stripe.PaymentIntentStatusRequiresAction:
+		hint = "the card needs 3D Secure authentication on the client first"
+	case stripe.PaymentIntentStatusProcessing:
+		hint = "the payment is still processing, try again shortly"
+	case stripe.PaymentIntentStatusCanceled:
+		hint = "the payment was cancelled"
+	}
+	if pi.LastPaymentError != nil && pi.LastPaymentError.Msg != "" {
+		hint += ": " + pi.LastPaymentError.Msg
+	}
+	if hint == "" {
+		return fmt.Errorf("%s (status %s)", cons.PaymentIntentNotPaid, pi.Status)
+	}
+	return fmt.Errorf("%s: %s (status %s)", cons.PaymentIntentNotPaid, hint, pi.Status)
+}
+
 // _subscriptionFromInvoiceIntent adopts the subscription whose first invoice
 // the client paid with this PaymentIntent.
 func (s *stripePayment) _subscriptionFromInvoiceIntent(pi *stripe.PaymentIntent, stripePriceId string) (*stripe.Subscription, error) {
 	if pi.Status != stripe.PaymentIntentStatusSucceeded {
-		return nil, errors.New(cons.PaymentIntentNotPaid)
+		return nil, paymentIntentNotPaid(pi)
 	}
 	sub, err := subscription.Get(pi.Invoice.Subscription.ID, nil)
 	if err != nil {
@@ -841,8 +866,18 @@ func (s *stripePayment) _subscriptionFromInvoiceIntent(pi *stripe.PaymentIntent,
 // settled by a standalone PaymentIntent. The card is saved on the customer
 // so Stripe can charge it for renewals.
 func (s *stripePayment) _subscriptionPaidByIntent(in Request, pi *stripe.PaymentIntent, stripePriceId string) (*stripe.Subscription, error) {
+	// Card attached but never confirmed: confirm it here instead of failing.
+	if pi.Status == stripe.PaymentIntentStatusRequiresConfirmation && pi.PaymentMethod != nil {
+		cp := &stripe.PaymentIntentConfirmParams{}
+		cp.AddExpand("payment_method")
+		confirmed, err := paymentintent.Confirm(pi.ID, cp)
+		if err != nil {
+			return nil, err
+		}
+		pi = confirmed
+	}
 	if pi.Status != stripe.PaymentIntentStatusSucceeded && pi.Status != stripe.PaymentIntentStatusRequiresCapture {
-		return nil, errors.New(cons.PaymentIntentNotPaid)
+		return nil, paymentIntentNotPaid(pi)
 	}
 	if pi.PaymentMethod == nil {
 		return nil, errors.New(cons.PaymentDeclined)
