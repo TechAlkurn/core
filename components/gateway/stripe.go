@@ -68,6 +68,7 @@ type StripePayment interface {
 	StripeTransfers(amount int64, accountNumber string) (result *stripe.Transfer, err error)
 	StripeCreateSubscription(in Request) (result *stripe.Subscription, err error)
 	StripeCreateSubscriptionByPaymentIntent(in Request, stripePriceId, paymentIntentId string) (result *stripe.Subscription, err error)
+	StripeCreateSubscribeWithSavedCard(cardId, customerId, stripePriceId, couponCode string, isProration bool) (*stripe.Subscription, error)
 	StripeSubscriptionUpdate(in Request) (result *stripe.Subscription, err error)
 	StripeSubscriptionCancel(subscriptionId string) (result *stripe.Subscription, err error)
 	StripeSubscriptionCancelAtPeriodEnd(subscriptionId string) (result *stripe.Subscription, err error)
@@ -1507,6 +1508,41 @@ func (s *stripePayment) CreatePaymentMethod(token string) (result *stripe.Paymen
 		return nil, err
 	}
 	return
+}
+
+// _subscribeWithSavedCard creates a subscription paid by a card the logged-in
+// user already saved. The customer is taken from the user's own saved-card
+// row (user_profile_card), never trusted from the request, so one user can't
+// subscribe with another user's card.
+func (s *stripePayment) StripeCreateSubscribeWithSavedCard(cardId, customerId, stripePriceId, couponCode string, isProration bool) (*stripe.Subscription, error) {
+	if lib.IsEmpty(stripePriceId) {
+		return nil, errors.New(cons.PlanNotValid)
+	}
+	s.LoadStripeKey()
+	params := &stripe.SubscriptionParams{
+		Customer: stripe.String(customerId),
+		Items:    []*stripe.SubscriptionItemsParams{{Price: stripe.String(stripePriceId)}},
+	}
+	if strings.HasPrefix(cardId, "pm_") {
+		params.DefaultPaymentMethod = stripe.String(cardId)
+	} else {
+		// Legacy Card/Source objects saved with card.New are customer sources.
+		params.DefaultSource = stripe.String(cardId)
+	}
+	if !lib.IsEmpty(couponCode) {
+		params.Discounts = []*stripe.SubscriptionDiscountParams{{Coupon: stripe.String(couponCode)}}
+	}
+	if isProration {
+		params.ProrationBehavior = stripe.String("create_prorations")
+	}
+	result, err := subscription.New(params)
+	if err != nil {
+		return nil, err
+	}
+	if result == nil || lib.IsEmpty(result.ID) {
+		return nil, errors.New(cons.SubscriptionDeclined)
+	}
+	return result, nil
 }
 
 // Assuming you have a function to create a payment method from a token
