@@ -1,15 +1,19 @@
 package socket
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"log"
 	"net"
 	"net/http"
+	"os"
 	"sync"
 	"time"
 
+	"github.com/TechAlkurn/core/config"
 	"github.com/gin-gonic/gin"
+	"github.com/go-redis/redis/v8"
 	"github.com/gorilla/websocket"
 )
 
@@ -163,20 +167,96 @@ func logReadError(err error) {
 	log.Println("WebSocket Read Error:", err)
 }
 
+// Broadcast consumes the Broadcast channel and sends each message to every
+// connected client across all instances of the app.
+//
+// When Redis is configured (config.InitRedis called and REDIS_ADDR set), each
+// message is published to a Redis channel and every instance, this one
+// included, delivers it to its own clients. That way a message sent by the
+// instance handling a webhook reaches clients connected to any other instance
+// behind the load balancer. Without Redis, or if a publish fails, the message
+// goes only to this instance's clients.
 func (base *socketHandler) Broadcast() {
+	rdb := redisClient()
+	if rdb != nil {
+		startSubscriber(rdb)
+	}
 	for message := range Broadcast {
 		data, err := json.Marshal(message)
 		if err != nil {
 			log.Println("WebSocket broadcast marshal error:", err)
 			continue
 		}
-		// Write outside the map lock so one slow client can't block
-		// new connections from registering.
-		for _, cl := range snapshotClients() {
-			if err := cl.write(data); err != nil {
-				log.Println("WebSocket write error:", err)
-				removeClient(cl.conn)
+		if rdb != nil {
+			ctx, cancel := context.WithTimeout(context.Background(), writeWait)
+			err = rdb.Publish(ctx, redisChannel(), data).Err()
+			cancel()
+			if err == nil {
+				continue // delivered locally by the subscriber
 			}
+			log.Println("WebSocket redis publish failed, delivering to local clients only:", err)
+		}
+		deliverLocal(data)
+	}
+}
+
+// redisClient returns the shared Redis client, or nil when Redis isn't set up.
+// config.Redis is created even with an empty REDIS_ADDR (go-redis then dials
+// localhost:6379), so the env var decides whether Redis is meant to be used.
+func redisClient() *redis.Client {
+	if config.Redis == nil || os.Getenv("REDIS_ADDR") == "" {
+		return nil
+	}
+	return config.Redis
+}
+
+// redisChannel is the pub/sub channel for broadcasts. It is namespaced per app
+// so apps sharing one Redis server don't receive each other's messages.
+// SOCKET_REDIS_CHANNEL overrides it; otherwise it is derived from DB_NAME,
+// falling back to SITE_NAME.
+func redisChannel() string {
+	if ch := os.Getenv("SOCKET_REDIS_CHANNEL"); ch != "" {
+		return ch
+	}
+	name := os.Getenv("DB_NAME")
+	if name == "" {
+		name = os.Getenv("SITE_NAME")
+	}
+	return "core:socket:broadcast:" + name
+}
+
+var subscribeOnce sync.Once
+
+// startSubscriber delivers messages from the Redis channel to this instance's
+// clients. It runs once per process, even if Broadcast is started twice, so
+// clients never get duplicates. go-redis reconnects the subscription on its
+// own; messages published while it is disconnected are not replayed.
+func startSubscriber(rdb *redis.Client) {
+	subscribeOnce.Do(func() {
+		channel := redisChannel()
+		ctx, cancel := context.WithTimeout(context.Background(), writeWait)
+		if err := rdb.Ping(ctx).Err(); err != nil {
+			log.Printf("WebSocket redis unreachable at startup (%v); will keep retrying on %q", err, channel)
+		}
+		cancel()
+
+		pubsub := rdb.Subscribe(context.Background(), channel)
+		go func() {
+			for msg := range pubsub.Channel() {
+				deliverLocal([]byte(msg.Payload))
+			}
+		}()
+	})
+}
+
+// deliverLocal sends data to the clients connected to this instance.
+// It writes outside the map lock so one slow client can't block new
+// connections from registering.
+func deliverLocal(data []byte) {
+	for _, cl := range snapshotClients() {
+		if err := cl.write(data); err != nil {
+			log.Println("WebSocket write error:", err)
+			removeClient(cl.conn)
 		}
 	}
 }
