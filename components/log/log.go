@@ -44,9 +44,8 @@ func DockerLog(c context.Context, rawQuery string) (map[string]any, error) {
 	}
 	container := os.Getenv("DOCKER_CONTAINER")
 	if container == "" {
-		container = "amlakserv_app"
+		return nil, fmt.Errorf("docker container not found")
 	}
-
 	tail := dockerLogDefaultTail
 	if v := lib.ToInt(srv.Query("tail")); v > 0 {
 		tail = min(v, dockerLogMaxTail)
