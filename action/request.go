@@ -45,6 +45,7 @@ func HttpRequest(in Payload, params ...map[string]any) *Context {
 	if !isNil(in) {
 		query = in.GetQuery()
 	}
+
 	c := Request(query)
 	for _, p := range params {
 		c.SetQueryParams(p)
