@@ -27,7 +27,26 @@ func NewRequest(uri string) IRequest {
 	return req
 }
 
-// Factory alternative
+// Payload is anything that carries a raw query string, e.g. the host's
+// generated *gen.Request. It is defined here rather than reused from
+// db/activerecord because activerecord imports action.
+type Payload interface {
+	GetQuery() string
+}
+
+// HttpRequest builds a Context from in's query string. A nil in (or a typed
+// nil such as a nil *gen.Request from cron) yields an empty query.
+//
+//	c := action.HttpRequest(in) // in *gen.Request
+func HttpRequest(in Payload) *Context {
+	query := ""
+	if in != nil {
+		query = in.GetQuery()
+	}
+	return Request(query)
+}
+
+// Request builds a Context from a raw query string.
 func Request(query string) *Context {
 	req := &Context{Uri: query}
 	req.PgRequest()

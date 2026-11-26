@@ -336,3 +336,18 @@ func TestMapper(t *testing.T) {
 		t.Error("empty body must read as zero values")
 	}
 }
+
+func TestNewBaseForm_ZeroPrimaryIdIsNew(t *testing.T) {
+	frm := NewBaseForm[modelForTest](&Request{Query: "primary_id=0"})
+	if !frm.IsNewRecord {
+		t.Error("primary_id=0: want new record")
+	}
+	frm.SetParams(map[string]any{"primary_id": "abc"})
+	if frm.IsNewRecord {
+		t.Error("string primary_id: want existing record")
+	}
+	frm.SetParams(map[string]any{"primary_id": 0})
+	if !frm.IsNewRecord {
+		t.Error("SetParams primary_id=0: want new record")
+	}
+}

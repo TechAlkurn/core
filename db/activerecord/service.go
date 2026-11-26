@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/TechAlkurn/core/action"
+	"github.com/TechAlkurn/core/cons"
 	"github.com/TechAlkurn/core/lib"
 	"github.com/morkid/paginate"
 )
@@ -89,7 +90,7 @@ func View[T any](in Payload, transform func(*T) any, params ...any) (any, error)
 	}
 	item, err := NewAR[T]().FindOne(args)
 	if err != nil {
-		return nil, err
+		return nil, recordNotFound(err)
 	}
 	if transform != nil {
 		return transform(item), nil
@@ -102,7 +103,7 @@ func View[T any](in Payload, transform func(*T) any, params ...any) (any, error)
 func Get[T any](in Payload, params ...any) (*T, error) {
 	args := Args(in, params...)
 	if len(args) == 0 {
-		return nil, ErrRecordNotFound
+		return nil, recordNotFound(ErrRecordNotFound)
 	}
 	return NewAR[T]().FindOne(args)
 }
@@ -115,7 +116,7 @@ func Del[T any](in Payload, params ...any) (bool, error) {
 		return false, ErrRecordNotFound
 	}
 	if err := NewAR[T]().DeleteAll(args); err != nil {
-		return false, err
+		return false, recordNotFound(err)
 	}
 	return true, nil
 }
@@ -171,4 +172,11 @@ func splitList(s string) []string {
 		}
 	}
 	return out
+}
+
+func recordNotFound(err error) error {
+	if errors.Is(err, ErrRecordNotFound) {
+		return errors.New(cons.RecordNotFound)
+	}
+	return err
 }

@@ -1,10 +1,5 @@
 package activerecord
 
-// BaseForm is the domain-free core of every request form: request parsing,
-// primary-key lookup, the generic save path and small helpers. (Formerly
-// components/base.) Anything that touches application models (custom fields,
-// media, enums) lives in the host app, which embeds BaseForm.
-
 import (
 	"errors"
 	"maps"
@@ -17,7 +12,11 @@ import (
 	"gorm.io/gorm"
 )
 
-// BaseForm is the generic form for model T. Construct it with NewBaseForm.
+// BaseForm is the generic, domain-free form for model T (formerly
+// components/base): request parsing, primary-key lookup, the generic save
+// path and small helpers. Host apps embed it and add anything that touches
+// their own models (custom fields, media, enums). Construct it with
+// NewBaseForm.
 type BaseForm[T any] struct {
 	ModelItem   *ActiveRecord[T]
 	Req         *action.Context
@@ -39,10 +38,11 @@ type BaseForm[T any] struct {
 	PKColumn string
 	PKField  string
 	PKValue  any
-	// AfterSave runs inside the save transaction, after SaveItem persists the
-	// row but before commit. Return an error to trigger a rollback. Useful for
-	// creating linked rows (mail templates, audit logs, etc.) atomically with
-	// the primary save.
+	// AfterSave runs after SaveItem persists the row. When the form is bound
+	// to a transaction (NewBaseForm(in, tx)), it runs inside it before commit,
+	// so returning an error rolls the save back — useful for creating linked
+	// rows (mail templates, audit logs, etc.) atomically. Without a tx the row
+	// is already committed and the error is only reported.
 	AfterSave func(*T) error
 
 	tx *gorm.DB
@@ -61,7 +61,7 @@ func NewBaseForm[T any](in Payload, tx ...*gorm.DB) *BaseForm[T] {
 		Mapper:      mapper,
 		Form:        mapper.Data(),
 		PrimaryId:   lib.ToUint32(primaryID),
-		IsNewRecord: lib.IsEmpty(primaryID),
+		IsNewRecord: isNewPrimaryID(primaryID),
 		UserId:      lib.ToUint32(req.Query("user_id")),
 		ItemId:      lib.ToUint32(req.Query("item_id")),
 		Module:      req.Query("module"),
@@ -91,6 +91,12 @@ func NewBaseForm[T any](in Payload, tx ...*gorm.DB) *BaseForm[T] {
 	return frm
 }
 
+// isNewPrimaryID reports whether a primary_id query value means "create":
+// absent, empty or "0". Non-numeric values (string PKs) are existing records.
+func isNewPrimaryID(primaryID string) bool {
+	return primaryID == "" || primaryID == "0"
+}
+
 // Tx returns the transaction handle the form is bound to (nil = autocommit).
 func (frm *BaseForm[T]) Tx() *gorm.DB { return frm.tx }
 
@@ -110,7 +116,7 @@ func (frm *BaseForm[T]) SetParams(params map[string]any) *BaseForm[T] {
 	frm.Req.SetQueryParams(params)
 	primaryID := frm.Req.Query("primary_id")
 	frm.PrimaryId = lib.ToUint32(primaryID)
-	frm.IsNewRecord = lib.IsEmpty(primaryID)
+	frm.IsNewRecord = isNewPrimaryID(primaryID)
 	if v := frm.Req.Query("user_id"); v != "" {
 		frm.UserId = lib.ToUint32(v)
 	}
@@ -186,7 +192,8 @@ func (frm *BaseForm[T]) pkLookup() (query string, args []any, ok bool) {
 }
 
 // FindItem returns the record being edited, or a fresh zero-value T without
-// touching the DB when this is a new record.
+// touching the DB when this is a new record. arg is unused; it is kept so
+// existing callers still compile.
 func (frm *BaseForm[T]) FindItem(arg ...any) *T {
 	query, args, ok := frm.pkLookup()
 	if !ok {
@@ -197,13 +204,15 @@ func (frm *BaseForm[T]) FindItem(arg ...any) *T {
 
 // findItemErr is FindItem for the save path: "not found" still yields a
 // fresh T, but any other DB error is returned so SaveItem never turns a
-// failed lookup into an INSERT.
+// failed lookup into an INSERT. It reads through the form's transaction, so
+// a row inserted earlier in the same tx is found rather than duplicated.
 func (frm *BaseForm[T]) findItemErr() (*T, error) {
 	query, args, ok := frm.pkLookup()
 	if !ok {
 		return new(T), nil
 	}
-	entity, err := frm.ModelItem.FindOne(query, args...)
+	entity := new(T)
+	err := DB(frm.tx).Where(query, args...).First(entity).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return new(T), nil
 	}
@@ -226,10 +235,15 @@ func (frm *BaseForm[T]) SaveItem() (modelItem *T, err error) {
 		return nil, err
 	}
 	if modelItem != nil {
-		if v := reflect.ValueOf(modelItem).Elem().FieldByName(frm.PKField); v.IsValid() && v.CanUint() {
-			// IsNewRecord is left as-is: child forms read it after SaveItem
-			// to decide on create-only work.
-			frm.PrimaryId = uint32(v.Uint())
+		// IsNewRecord is left as-is: child forms read it after SaveItem to
+		// decide on create-only work.
+		if v := reflect.Indirect(reflect.ValueOf(modelItem)).FieldByName(frm.PKField); v.IsValid() {
+			switch {
+			case v.CanUint():
+				frm.PrimaryId = uint32(v.Uint())
+			case v.CanInt() && v.Int() >= 0:
+				frm.PrimaryId = uint32(v.Int())
+			}
 		}
 	}
 	if frm.AfterSave != nil {
@@ -276,7 +290,7 @@ func (frm *BaseForm[T]) SaveIfPresentsWithDefault(handlers map[string]func(any) 
 // SyncChildren replaces every child row referencing a parent (fk = fkValue)
 // with one row per item in items ([]any of map[string]any, each stamped with
 // fk = fkValue). The delete is skipped for a new parent — nothing to replace
-// yet. Non-object items are ignored.
+// yet. Non-object items are ignored, and the caller's maps are not modified.
 func SyncChildren[T any](tx *gorm.DB, isNewRecord bool, fk string, fkValue uint32, items any) error {
 	list, _ := items.([]any)
 	ar := NewAR[T]()
@@ -286,10 +300,11 @@ func SyncChildren[T any](tx *gorm.DB, isNewRecord bool, fk string, fkValue uint3
 		}
 	}
 	for _, raw := range list {
-		item, ok := raw.(map[string]any)
+		src, ok := raw.(map[string]any)
 		if !ok {
 			continue
 		}
+		item := maps.Clone(src)
 		item[fk] = fkValue
 		if _, err := ar.Save(item, tx); err != nil {
 			config.Log.Printf("SyncChildren[%s]: %v\n", ar.GetModel(), err)
