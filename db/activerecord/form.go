@@ -91,6 +91,9 @@ var tableModelCache sync.Map // map[string]string â€” table name / struct name â
 //     Extra columns (e.g. "otp") are also applied to the UPDATE itself, so a
 //     concurrent change between the read and the write can't slip through.
 //
+// activerecord.UpdateFormDB(map[string]any{"tablename": "user_bank", "data": map[string]any{"is_approved": 1, "otp": nil}, "primary_id": map[string]any{"primary_id": primaryId, "otp": otp}})
+// activerecord.UpdateFormDB(map[string]any{"tablename": model.UserBank{}, "data": map[string]any{"is_approved": 1, "otp": nil}, "primary_id": map[string]any{"primary_id": primaryId, "otp": otp}})
+// activerecord.UpdateFormDB(map[string]any{"tablename": "UserBank", "fields": map[string]any{"is_approved": 1, "otp": nil}, "primary_id": map[string]any{"primary_id": primaryId, "otp": otp}})
 // When no row matches, the error wraps gorm.ErrRecordNotFound.
 func UpdateFormDB(in any, tx ...*gorm.DB) (any, error) {
 	switch v := in.(type) {
