@@ -38,12 +38,16 @@ type Payload interface {
 // nil such as a nil *gen.Request from cron) yields an empty query.
 //
 //	c := action.HttpRequest(in) // in *gen.Request
-func HttpRequest(in Payload) *Context {
+func HttpRequest(in Payload, params ...map[string]any) *Context {
 	query := ""
 	if in != nil {
 		query = in.GetQuery()
 	}
-	return Request(query)
+	c := Request(query)
+	for _, p := range params {
+		c.SetQueryParams(p)
+	}
+	return c
 }
 
 // Request builds a Context from a raw query string.
