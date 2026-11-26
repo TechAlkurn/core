@@ -47,6 +47,7 @@ func HttpRequest(in Payload, params ...map[string]any) *Context {
 	for _, p := range params {
 		c.SetQueryParams(p)
 	}
+
 	return c
 }
 
