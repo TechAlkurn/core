@@ -6,14 +6,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 `github.com/TechAlkurn/core` is a shared Go library (no `main` package) consumed by other services via `go get github.com/TechAlkurn/core`. Host apps are a Gin REST gateway in front of an internal gRPC server, and this module holds the shared pieces of both. Changes here affect every downstream app, so keep exported function signatures stable.
 
-**Never import a host-app package** (e.g. its generated protos under `pkg/protos`). Host types come in through interfaces or generics instead: `action.ProtoResponse`, `register.RequestMessage`/`ResponseMessage`, `base.Payload`, `activerecord.QueryReader`. `cons/` mirrors the host's `pkg/enum` values and error messages by hand, so keep the two in sync.
+**Never import a host-app package** (e.g. its generated protos under `pkg/protos`). Host types come in through interfaces or generics instead: `action.ProtoResponse`, `register.RequestMessage`/`ResponseMessage`, `activerecord.Payload`, `activerecord.QueryReader`. `cons/` mirrors the host's `pkg/enum` values and error messages by hand, so keep the two in sync.
 
 ## Commands
 
 ```bash
 go build ./...
 go vet ./...
-go test ./...                                   # tests in reqctx, register, config, db/hooks, components/base
+go test ./...                                   # tests in reqctx, register, config, db/hooks, db/activerecord
 go test ./register -run TestName                # single test
 go generate ./register/...                      # regenerate register/internal/testpb (needs protoc + protoc-gen-go/-go-grpc)
 ```
@@ -44,12 +44,11 @@ The goroutine-bound store **does not cross `go func()`**, so use `reqctx.Go(fn)`
 - **`register/`**: the generic gRPC↔Gin bridge. `NewGrpcAction[Req, Res]()` is built from the host's generated message types; `HandleGrpc`/`GrpcHandle` wrap gRPC calls as Gin handlers and build the request from `gin.Context`. It also holds the gRPC recovery/identity interceptors and panic reporting to GitLab issues (`GITLAB_PROJECT_ID`).
 - **`config/`**: host startup wiring, made of `Init*` functions (`InitEnv` loads `.env`, `.env.local` or `.env.staging`, and skips the panic when `ROOT` is already set, as in Docker), plus `InitDB`, `InitRedis`, `InitAws`, `InitLog`, `InitCmd` (cobra), `InitSwagger`, `InitGrpcClient`/load balancer, `RunServer`, rate limiting, pprof, DB dump/restore and gRPC auth.
 - **`components/`**: reusable feature modules.
-  - `base`: generic CRUD for gRPC services: `Search`/`View`/`Del[T]` over a `Payload`, `BaseForm[T]` (body overrides query params), `SyncChildren`, and `Mapper` (`base.ToMapped(in.Form).ToString("title")`) for panic-free reads of the decoded form.
   - `middleware`: JWT auth, RBAC, recovery, timeout, Prometheus metrics.
   - `rbac`: a port of Yii2's `yii\rbac\DbManager` with the same table schema. Ops are dispatched by `?key=<op>`.
   - Others: `gateway` (Stripe, etc.), `mailers` (with `drivers/`, e.g. Mailjet), `fcm`, `sms`, `socket`, `agora`, `uploader`, `image`, `calendar`, `cache`, `mutex`, `attempt`, `githelper`, `console`.
 - **`db/`**: the GORM data layer. Hosts must call `db.SetConnection(*gorm.DB)` and `db.SetLogger(Logger)` at startup, because `db.Connection()` panics otherwise.
-  - `activerecord/`: generic `ActiveRecord[T]` (FindOne/FindAll/Count/SaveDB/DataQuery…), `Transaction`/`InTx`, `Exec`.
+  - `activerecord/`: generic `ActiveRecord[T]` (FindOne/FindAll/Count/SaveDB/DataQuery…), `Transaction`/`InTx`, `Exec`. Also the generic CRUD for gRPC services (formerly `components/base`): `Search`/`View`/`Del[T]` over a `Payload`, `BaseForm[T]` (body overrides query params), `SyncChildren`, and `Mapper` (`activerecord.ToMapped(in.Form).ToString("title")`) for panic-free reads of the decoded form.
   - `hooks/`: a registry of before/after save/update hooks for each model.
   - `drivers/`: the MySQL connection (`NewMysql` reads `DB_NAME`, `DB_URL`) and schema introspection.
   - `query/`: raw-SQL helpers such as `ResetTables`. It validates and backtick-quotes identifiers and pins a single connection so `FOREIGN_KEY_CHECKS` can't leak into other pooled sessions.

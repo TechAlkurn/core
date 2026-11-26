@@ -17,7 +17,6 @@ Requires Go 1.26+.
 | `reqctx`                                                      | Per-request identity (user id, lang) and current gRPC request                                                                                                 |
 | `config`                                                      | Startup wiring: `.env`, DB, Redis, AWS, logging, Swagger, gRPC client/server, gRPC auth, rate limit, pprof, DB backup/restore                                 |
 | `db`, `db/activerecord`, `db/hooks`, `db/drivers`, `db/query` | GORM connection registry, generic `ActiveRecord[T]`, model hooks, MySQL driver + schema introspection, raw-SQL helpers                                        |
-| `components/base`                                             | Generic CRUD services (`Search`, `View`, `Del`) and `BaseForm[T]`                                                                                             |
 | `components/middleware`                                       | JWT auth (frontend/backend), RBAC, recovery, timeouts, concurrency limit, Prometheus metrics                                                                  |
 | `components/rbac`                                             | Port of Yii2 `DbManager` RBAC (same table schema)                                                                                                             |
 | `components/*`                                                | `authorization` (JWT/PASETO), `gateway` (Stripe), `mailers`, `fcm`, `sms`, `socket`, `agora`, `uploader`, `image`, `calendar`, `cache`, `mutex`, `attempt`, … |
@@ -99,24 +98,24 @@ The identity is bound to the handler goroutine and is **not** visible in a plain
 ### Services and forms
 
 ```go
-import "github.com/TechAlkurn/core/components/base"
+import "github.com/TechAlkurn/core/db/activerecord"
 
 // list with filtering + pagination from the query string
-page := base.Search(in, func(item *model.Post) any { return item })
+page := activerecord.Search(in, func(item *model.Post) any { return item })
 
 // single item / delete by primary_id
-item, err := base.View[model.Post](in, nil)
-ok, err := base.Del[model.Post](in)
+item, err := activerecord.View[model.Post](in, nil)
+ok, err := activerecord.Del[model.Post](in)
 
 // create / update
-frm := base.NewBaseForm[model.Post](in)
+frm := activerecord.NewBaseForm[model.Post](in)
 saved, err := frm.SaveItem()
 
 // typed reads of the JSON body
-title := base.ToMapped(in.GetForm()).ToString("title")
+title := activerecord.ToMapped(in.GetForm()).ToString("title")
 ```
 
-`in` is anything with `GetQuery() string` and `GetForm() []byte`, such as a generated request or `&base.Request{Query: "...", Form: body}` in cron jobs and tests.
+`in` is anything with `GetQuery() string` and `GetForm() []byte`, such as a generated request or `&activerecord.Request{Query: "...", Form: body}` in cron jobs and tests.
 
 ### Active record
 

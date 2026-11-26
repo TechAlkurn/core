@@ -1,8 +1,9 @@
-// Package base holds the domain-free core of every request form: request
-// parsing, primary-key lookup, the generic save path and small helpers.
-// Anything that touches application models (custom fields, media, enums)
-// lives in pkg/application/common/forms, which embeds BaseForm.
-package base
+package activerecord
+
+// BaseForm is the domain-free core of every request form: request parsing,
+// primary-key lookup, the generic save path and small helpers. (Formerly
+// components/base.) Anything that touches application models (custom fields,
+// media, enums) lives in the host app, which embeds BaseForm.
 
 import (
 	"errors"
@@ -10,18 +11,15 @@ import (
 	"reflect"
 	"slices"
 
-	"github.com/TechAlkurn/core/config"
-
-	"github.com/TechAlkurn/core/db/activerecord"
-
 	"github.com/TechAlkurn/core/action"
+	"github.com/TechAlkurn/core/config"
 	"github.com/TechAlkurn/core/lib"
 	"gorm.io/gorm"
 )
 
 // BaseForm is the generic form for model T. Construct it with NewBaseForm.
 type BaseForm[T any] struct {
-	ModelItem   *activerecord.ActiveRecord[T]
+	ModelItem   *ActiveRecord[T]
 	Req         *action.Context
 	Mapper      Mapper
 	Form        map[string]any // decoded request body; same map as Mapper.Data()
@@ -58,7 +56,7 @@ func NewBaseForm[T any](in Payload, tx ...*gorm.DB) *BaseForm[T] {
 	primaryID := req.Query("primary_id")
 
 	frm := &BaseForm[T]{
-		ModelItem:   activerecord.NewAR[T](),
+		ModelItem:   NewAR[T](),
 		Req:         req,
 		Mapper:      mapper,
 		Form:        mapper.Data(),
@@ -281,7 +279,7 @@ func (frm *BaseForm[T]) SaveIfPresentsWithDefault(handlers map[string]func(any) 
 // yet. Non-object items are ignored.
 func SyncChildren[T any](tx *gorm.DB, isNewRecord bool, fk string, fkValue uint32, items any) error {
 	list, _ := items.([]any)
-	ar := activerecord.NewAR[T]()
+	ar := NewAR[T]()
 	if !isNewRecord {
 		if err := ar.DeleteAllTx(tx, fk+" = ?", fkValue); err != nil {
 			return err

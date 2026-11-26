@@ -1,10 +1,10 @@
-package base
+package activerecord
 
 import "github.com/TechAlkurn/core/lib"
 
 // Mapper gives typed, panic-free reads over a decoded JSON request body
 // (Payload.GetForm()). Value receivers, so a call can chain straight off
-// ToMapped: base.ToMapped(in.Form).ToString("title").
+// ToMapped: activerecord.ToMapped(in.Form).ToString("title").
 type Mapper struct {
 	data map[string]any
 }

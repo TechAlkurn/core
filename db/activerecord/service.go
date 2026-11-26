@@ -1,11 +1,9 @@
-package base
+package activerecord
 
 import (
 	"errors"
 	"maps"
 	"strings"
-
-	"github.com/TechAlkurn/core/db/activerecord"
 
 	"github.com/TechAlkurn/core/action"
 	"github.com/TechAlkurn/core/lib"
@@ -64,7 +62,7 @@ func formOf(in Payload) []byte {
 // transform to each row, and returns the paginate.Page. Optional params
 // overlay query values on the request before the query runs.
 //
-//	base.Search(in, func(item *model.UserAward) any {
+//	activerecord.Search(in, func(item *model.UserAward) any {
 //		return helpers.NewUserAward(item).Transform()
 //	})
 func Search[T any](in Payload, transform func(*T) any, params ...map[string]any) paginate.Page {
@@ -72,7 +70,7 @@ func Search[T any](in Payload, transform func(*T) any, params ...map[string]any)
 	for _, p := range params {
 		c.SetQueryParams(p)
 	}
-	query := activerecord.NewAR[T]().DataQuery(c, splitList(c.Query("exclude"))...)
+	query := NewAR[T]().DataQuery(c, splitList(c.Query("exclude"))...)
 	items := []*T{}
 	result := paginate.New().With(query).Request(c.Request).Response(&items)
 	pages := make([]any, 0, len(items))
@@ -89,7 +87,7 @@ func View[T any](in Payload, transform func(*T) any, params ...any) (any, error)
 	if len(args) == 0 {
 		return nil, ErrRecordNotFound
 	}
-	item, err := activerecord.NewAR[T]().FindOne(args)
+	item, err := NewAR[T]().FindOne(args)
 	if err != nil {
 		return nil, err
 	}
@@ -106,7 +104,7 @@ func Get[T any](in Payload, params ...any) (*T, error) {
 	if len(args) == 0 {
 		return nil, ErrRecordNotFound
 	}
-	return activerecord.NewAR[T]().FindOne(args)
+	return NewAR[T]().FindOne(args)
 }
 
 // Del deletes every T matching Args(in, params...). It refuses to run without
@@ -116,7 +114,7 @@ func Del[T any](in Payload, params ...any) (bool, error) {
 	if len(args) == 0 {
 		return false, ErrRecordNotFound
 	}
-	if err := activerecord.NewAR[T]().DeleteAll(args); err != nil {
+	if err := NewAR[T]().DeleteAll(args); err != nil {
 		return false, err
 	}
 	return true, nil

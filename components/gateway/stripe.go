@@ -7,7 +7,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/TechAlkurn/core/components/base"
 	"github.com/TechAlkurn/core/cons"
 
 	"github.com/TechAlkurn/core/config"
@@ -932,7 +931,7 @@ func (s *stripePayment) _subscriptionPaidByIntent(in Request, pi *stripe.Payment
 		params.DefaultPaymentMethod = stripe.String(pmId)
 	}
 	// reqFrm := lib.ToMapped(in.GetForm())
-	if reqFrm := base.ToMapped(in.GetForm()); reqFrm.Has("coupon") && !lib.IsEmpty(reqFrm.ToString("coupon")) {
+	if reqFrm := activerecord.ToMapped(in.GetForm()); reqFrm.Has("coupon") && !lib.IsEmpty(reqFrm.ToString("coupon")) {
 		params.Coupon = stripe.String(reqFrm.ToString("coupon"))
 	}
 	params.AddMetadata("user_id", lib.ToString(reqctx.UserID()))
