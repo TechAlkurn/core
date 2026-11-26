@@ -232,3 +232,20 @@ func TestModelFromValue(t *testing.T) {
 		t.Fatalf("UpdateFormDB(42) = %v", err)
 	}
 }
+
+func TestTableValue(t *testing.T) {
+	cases := []struct {
+		in   map[string]any
+		want any
+	}{
+		{map[string]any{"table": "user_bank"}, "user_bank"},
+		{map[string]any{"tablename": "user_bank"}, "user_bank"},
+		{map[string]any{"table": "a", "tablename": "b"}, "a"},
+		{map[string]any{}, nil},
+	}
+	for _, tc := range cases {
+		if got := tableValue(tc.in); got != tc.want {
+			t.Fatalf("tableValue(%v) = %v, want %v", tc.in, got, tc.want)
+		}
+	}
+}

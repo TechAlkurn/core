@@ -35,9 +35,10 @@ var tableModelCache sync.Map // map[string]string — table name / struct name �
 // Expected request shape:
 //
 //	query: ?primary_id=42
-//	form:  {"tablename": "user_profile", "data": {"first_name": "Ann", "meta": {"a": 1}}}
+//	form:  {"table": "user_profile", "data": {"first_name": "Ann", "meta": {"a": 1}}}
 //
-// "tablename" may be the DB table name or the Go struct name, and must belong
+// "table" ("tablename" is still accepted) may be the DB table name or the Go
+// struct name, and must belong
 // to a model registered with RegisterModel — unregistered tables are refused,
 // so a client can't write to arbitrary tables.
 //
@@ -75,13 +76,13 @@ var tableModelCache sync.Map // map[string]string — table name / struct name �
 // Server-side form: pass a map[string]any instead of a request.
 //
 //	activerecord.UpdateFormDB(map[string]any{
-//		"tablename":  model.UserBank{}, // or "user_bank" / "UserBank" (registered model)
+//		"table":      "user_bank", // or "UserBank" (registered model), or model.UserBank{}
 //		"fields":     map[string]any{"is_approved": 1, "otp": nil},
 //		"primary_id": map[string]any{"primary_id": primaryId, "otp": otp},
 //	})
 //
-//   - "tablename": a model value (T, *T) — no registration needed — or a
-//     table/struct name of a registered model.
+//   - "table" (or "tablename"): a model value (T, *T) — no registration
+//     needed — or a table/struct name of a registered model.
 //   - "fields" (or "data"): columns to set; nil writes NULL. Unknown or
 //     non-updatable columns are an error rather than silently dropped.
 //   - "primary_id": a scalar (single-column key) or a WHERE map. Inside the
@@ -91,9 +92,6 @@ var tableModelCache sync.Map // map[string]string — table name / struct name �
 //     Extra columns (e.g. "otp") are also applied to the UPDATE itself, so a
 //     concurrent change between the read and the write can't slip through.
 //
-// activerecord.UpdateFormDB(map[string]any{"tablename": "user_bank", "data": map[string]any{"is_approved": 1, "otp": nil}, "primary_id": map[string]any{"primary_id": primaryId, "otp": otp}})
-// activerecord.UpdateFormDB(map[string]any{"tablename": model.UserBank{}, "data": map[string]any{"is_approved": 1, "otp": nil}, "primary_id": map[string]any{"primary_id": primaryId, "otp": otp}})
-// activerecord.UpdateFormDB(map[string]any{"tablename": "UserBank", "fields": map[string]any{"is_approved": 1, "otp": nil}, "primary_id": map[string]any{"primary_id": primaryId, "otp": otp}})
 // When no row matches, the error wraps gorm.ErrRecordNotFound.
 func UpdateFormDB(in any, tx ...*gorm.DB) (any, error) {
 	switch v := in.(type) {
@@ -112,9 +110,9 @@ func updateFromRequest(in FormRequest, tx ...*gorm.DB) (any, error) {
 		return nil, err
 	}
 
-	tablename := strings.TrimSpace(lib.ToString(form["tablename"]))
+	tablename := strings.TrimSpace(lib.ToString(tableValue(form)))
 	if tablename == "" {
-		return nil, errors.New("UpdateFormDB: tablename is required")
+		return nil, errors.New("UpdateFormDB: table is required")
 	}
 	model, err := modelForTable(tablename)
 	if err != nil {
@@ -144,7 +142,7 @@ func updateFromRequest(in FormRequest, tx ...*gorm.DB) (any, error) {
 }
 
 func updateFromMap(in map[string]any, tx ...*gorm.DB) (any, error) {
-	model, err := modelFromValue(in["tablename"])
+	model, err := modelFromValue(tableValue(in))
 	if err != nil {
 		return nil, err
 	}
@@ -174,16 +172,24 @@ func updateFromMap(in map[string]any, tx ...*gorm.DB) (any, error) {
 	return applyUpdate(model, sch, name, where, attrs, tx...)
 }
 
-// modelFromValue returns a new *T for "tablename": a model value (T or *T)
-// or the table/struct name of a registered model.
+// tableValue returns m["table"], falling back to the older "tablename" key.
+func tableValue(m map[string]any) any {
+	if v, ok := m["table"]; ok && v != nil {
+		return v
+	}
+	return m["tablename"]
+}
+
+// modelFromValue returns a new *T for "table": a model value (T or *T) or
+// the table/struct name of a registered model.
 func modelFromValue(v any) (any, error) {
 	switch t := v.(type) {
 	case nil:
-		return nil, errors.New("UpdateFormDB: tablename is required")
+		return nil, errors.New("UpdateFormDB: table is required")
 	case string:
 		name := strings.TrimSpace(t)
 		if name == "" {
-			return nil, errors.New("UpdateFormDB: tablename is required")
+			return nil, errors.New("UpdateFormDB: table is required")
 		}
 		return modelForTable(name)
 	}
@@ -192,7 +198,7 @@ func modelFromValue(v any) (any, error) {
 		rt = rt.Elem()
 	}
 	if rt.Kind() != reflect.Struct {
-		return nil, fmt.Errorf("UpdateFormDB: tablename must be a model or a table name, got %T", v)
+		return nil, fmt.Errorf("UpdateFormDB: table must be a model or a table name, got %T", v)
 	}
 	return reflect.New(rt).Interface(), nil
 }
