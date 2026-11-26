@@ -124,4 +124,3 @@ func Wrap[T any](fn func() (T, error)) func() (any, error) {
 		return fn()
 	}
 }
-
