@@ -101,16 +101,12 @@ func View[T any](in Payload, transform func(*T) any, params ...any) (any, error)
 
 // Get loads the one T matching Args(in, params...) and returns the raw model,
 // or nil when there is no filter or no matching row.
-func Get[T any](in Payload, params ...any) *T {
+func Get[T any](in Payload, params ...any) (*T, error) {
 	args := Args(in, params...)
 	if len(args) == 0 {
-		return nil
+		return nil, ErrRecordNotFound
 	}
-	item, err := activerecord.NewAR[T]().FindOne(args)
-	if err != nil {
-		return nil
-	}
-	return item
+	return activerecord.NewAR[T]().FindOne(args)
 }
 
 // Del deletes every T matching Args(in, params...). It refuses to run without
