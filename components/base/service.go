@@ -93,7 +93,10 @@ func View[T any](in Payload, transform func(*T) any, params ...any) (any, error)
 	if err != nil {
 		return nil, err
 	}
-	return transform(item), nil
+	if lib.NotEmpty(transform) {
+		return transform(item), nil
+	}
+	return item, nil
 }
 
 // Del deletes every T matching Args(in, params...). It refuses to run without
@@ -158,6 +161,6 @@ func splitList(s string) []string {
 		if part = strings.TrimSpace(part); part != "" {
 			out = append(out, part)
 		}
-	} 
+	}
 	return out
 }
