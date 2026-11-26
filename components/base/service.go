@@ -99,6 +99,20 @@ func View[T any](in Payload, transform func(*T) any, params ...any) (any, error)
 	return item, nil
 }
 
+// Get loads the one T matching Args(in, params...) and returns the raw model,
+// or nil when there is no filter or no matching row.
+func Get[T any](in Payload, params ...any) *T {
+	args := Args(in, params...)
+	if len(args) == 0 {
+		return nil
+	}
+	item, err := activerecord.NewAR[T]().FindOne(args)
+	if err != nil {
+		return nil
+	}
+	return item
+}
+
 // Del deletes every T matching Args(in, params...). It refuses to run without
 // a filter, so a bare request can never wipe the table.
 func Del[T any](in Payload, params ...any) (bool, error) {
