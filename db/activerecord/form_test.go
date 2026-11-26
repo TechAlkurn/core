@@ -140,3 +140,95 @@ func TestColumnValue(t *testing.T) {
 		t.Fatal("expected error for int <- object")
 	}
 }
+
+func TestWhereFromValue(t *testing.T) {
+	single := mustSchema(t, &formSingle{})
+	comp := mustSchema(t, &formComposite{})
+
+	cases := []struct {
+		name    string
+		sch     *schema.Schema
+		in      any
+		want    map[string]any
+		wantErr string
+	}{
+		{name: "scalar", sch: single, in: 42, want: map[string]any{"id": 42}},
+		{name: "primary_id alias plus column", sch: single, in: map[string]any{"primary_id": 7, "title": "123456"},
+			want: map[string]any{"id": 7, "title": "123456"}},
+		{name: "go field name", sch: single, in: map[string]any{"Id": 7, "Meta": nil}, want: map[string]any{"id": 7, "meta": nil}},
+		{name: "composite", sch: comp, in: map[string]any{"user_id": 1, "item_name": "a"}, want: map[string]any{"user_id": 1, "item_name": "a"}},
+		{name: "missing", sch: single, wantErr: "primary_id is required"},
+		{name: "no key column", sch: single, in: map[string]any{"title": "x"}, wantErr: `missing key column "id"`},
+		{name: "empty key", sch: single, in: map[string]any{"primary_id": ""}, wantErr: `missing key column "id"`},
+		{name: "unknown column", sch: single, in: map[string]any{"primary_id": 1, "nope": 1}, wantErr: `unknown column "nope"`},
+		{name: "composite alias", sch: comp, in: map[string]any{"primary_id": 1}, wantErr: "composite key"},
+		{name: "composite scalar", sch: comp, in: 1, wantErr: "composite key"},
+		{name: "nested value", sch: single, in: map[string]any{"primary_id": map[string]any{}}, wantErr: "must be a scalar"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := whereFromValue(tc.sch, tc.in)
+			if tc.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+					t.Fatalf("err = %v, want %q", err, tc.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(got) != len(tc.want) {
+				t.Fatalf("got %v, want %v", got, tc.want)
+			}
+			for k, v := range tc.want {
+				if gv, ok := got[k]; !ok || gv != v {
+					t.Fatalf("got %v, want %v", got, tc.want)
+				}
+			}
+		})
+	}
+}
+
+func TestUpdateAttrsStrict(t *testing.T) {
+	sch := mustSchema(t, &formSingle{})
+
+	got, err := updateAttrs(sch, map[string]any{"count": 1, "Meta": nil}, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got["count"] != 1 {
+		t.Fatalf("count = %v", got["count"])
+	}
+	if v, ok := got["meta"]; !ok || v != nil {
+		t.Fatalf("meta = %v, %v; want explicit nil", v, ok)
+	}
+
+	for _, key := range []string{"nope", "id"} {
+		if _, err := updateAttrs(sch, map[string]any{key: 1}, true); err == nil {
+			t.Fatalf("strict %q: want error", key)
+		}
+		if _, err := updateAttrs(sch, map[string]any{key: 1, "count": 1}, false); err != nil {
+			t.Fatalf("lenient %q: %v", key, err)
+		}
+	}
+}
+
+func TestModelFromValue(t *testing.T) {
+	for _, in := range []any{formSingle{}, &formSingle{}} {
+		m, err := modelFromValue(in)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, ok := m.(*formSingle); !ok {
+			t.Fatalf("%T: got %T, want *formSingle", in, m)
+		}
+	}
+	for _, in := range []any{nil, "", 42} {
+		if _, err := modelFromValue(in); err == nil {
+			t.Fatalf("%v: want error", in)
+		}
+	}
+	if _, err := UpdateFormDB(42); err == nil || !strings.Contains(err.Error(), "unsupported input") {
+		t.Fatalf("UpdateFormDB(42) = %v", err)
+	}
+}

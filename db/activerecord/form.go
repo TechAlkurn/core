@@ -71,7 +71,39 @@ var tableModelCache sync.Map // map[string]string — table name / struct name �
 │ ?user_id=1&item_name=admin, with no primary_id                 │ one parameter per key column                                │
 └────────────────────────────────────────────────────────────────┴─────────────────────────────────────────────────────────────┘
 */
-func UpdateFormDB(in FormRequest, tx ...*gorm.DB) (any, error) {
+//
+// Server-side form: pass a map[string]any instead of a request.
+//
+//	activerecord.UpdateFormDB(map[string]any{
+//		"tablename":  model.UserBank{}, // or "user_bank" / "UserBank" (registered model)
+//		"fields":     map[string]any{"is_approved": 1, "otp": nil},
+//		"primary_id": map[string]any{"primary_id": primaryId, "otp": otp},
+//	})
+//
+//   - "tablename": a model value (T, *T) — no registration needed — or a
+//     table/struct name of a registered model.
+//   - "fields" (or "data"): columns to set; nil writes NULL. Unknown or
+//     non-updatable columns are an error rather than silently dropped.
+//   - "primary_id": a scalar (single-column key) or a WHERE map. Inside the
+//     map, "primary_id" stands for the single key column and any other key
+//     is a column (DB or Go field name); nil matches IS NULL. Every primary
+//     key column must be covered, so one call updates at most one row.
+//     Extra columns (e.g. "otp") are also applied to the UPDATE itself, so a
+//     concurrent change between the read and the write can't slip through.
+//
+// When no row matches, the error wraps gorm.ErrRecordNotFound.
+func UpdateFormDB(in any, tx ...*gorm.DB) (any, error) {
+	switch v := in.(type) {
+	case map[string]any:
+		return updateFromMap(v, tx...)
+	case FormRequest:
+		return updateFromRequest(v, tx...)
+	default:
+		return nil, fmt.Errorf("UpdateFormDB: unsupported input %T", in)
+	}
+}
+
+func updateFromRequest(in FormRequest, tx ...*gorm.DB) (any, error) {
 	form, err := decodeForm(in.GetForm())
 	if err != nil {
 		return nil, err
@@ -101,45 +133,170 @@ func UpdateFormDB(in FormRequest, tx ...*gorm.DB) (any, error) {
 		return nil, err
 	}
 
+	attrs, err := updateAttrs(sch, data, false)
+	if err != nil {
+		return nil, fmt.Errorf("UpdateFormDB[%s]: %w", tablename, err)
+	}
+	return applyUpdate(model, sch, sch.Table, pk, attrs, tx...)
+}
+
+func updateFromMap(in map[string]any, tx ...*gorm.DB) (any, error) {
+	model, err := modelFromValue(in["tablename"])
+	if err != nil {
+		return nil, err
+	}
+	sch, err := parseSchema(model)
+	if err != nil {
+		return nil, fmt.Errorf("UpdateFormDB: %w", err)
+	}
+	name := sch.Table
+
+	raw, ok := in["fields"]
+	if !ok {
+		raw = in["data"]
+	}
+	data, err := formData(raw)
+	if err != nil {
+		return nil, err
+	}
+	attrs, err := updateAttrs(sch, data, true)
+	if err != nil {
+		return nil, fmt.Errorf("UpdateFormDB[%s]: %w", name, err)
+	}
+
+	where, err := whereFromValue(sch, in["primary_id"])
+	if err != nil {
+		return nil, fmt.Errorf("UpdateFormDB[%s]: %w", name, err)
+	}
+	return applyUpdate(model, sch, name, where, attrs, tx...)
+}
+
+// modelFromValue returns a new *T for "tablename": a model value (T or *T)
+// or the table/struct name of a registered model.
+func modelFromValue(v any) (any, error) {
+	switch t := v.(type) {
+	case nil:
+		return nil, errors.New("UpdateFormDB: tablename is required")
+	case string:
+		name := strings.TrimSpace(t)
+		if name == "" {
+			return nil, errors.New("UpdateFormDB: tablename is required")
+		}
+		return modelForTable(name)
+	}
+	rt := reflect.TypeOf(v)
+	for rt.Kind() == reflect.Pointer {
+		rt = rt.Elem()
+	}
+	if rt.Kind() != reflect.Struct {
+		return nil, fmt.Errorf("UpdateFormDB: tablename must be a model or a table name, got %T", v)
+	}
+	return reflect.New(rt).Interface(), nil
+}
+
+// updateAttrs maps data keys (DB or Go field names) to DB columns. Primary
+// keys and non-updatable columns are never written; in strict mode they and
+// unknown keys are an error instead of being skipped.
+func updateAttrs(sch *schema.Schema, data map[string]any, strict bool) (map[string]any, error) {
 	attrs := make(map[string]any, len(data))
 	for key, val := range data {
 		f := sch.LookUpField(key)
 		if f == nil || f.PrimaryKey || !f.Updatable || f.DBName == "" {
+			if strict {
+				return nil, fmt.Errorf("fields: %q is not an updatable column", key)
+			}
 			continue
 		}
 		v, err := columnValue(f, val)
 		if err != nil {
-			return nil, fmt.Errorf("UpdateFormDB[%s]: %w", tablename, err)
+			return nil, err
 		}
 		attrs[f.DBName] = v
 	}
 	if len(attrs) == 0 {
-		return nil, fmt.Errorf("UpdateFormDB[%s]: no updatable fields in data", tablename)
+		return nil, errors.New("no updatable fields in data")
 	}
+	return attrs, nil
+}
 
+// whereFromValue builds the WHERE map for the map form of UpdateFormDB. See
+// UpdateFormDB for the accepted shapes.
+func whereFromValue(sch *schema.Schema, v any) (map[string]any, error) {
+	if len(sch.PrimaryFields) == 0 {
+		return nil, errors.New("model has no primary key")
+	}
+	where := map[string]any{}
+	switch m := v.(type) {
+	case nil:
+		return nil, errors.New("primary_id is required")
+	case map[string]any:
+		for key, val := range m {
+			switch val.(type) {
+			case map[string]any, []any:
+				return nil, fmt.Errorf("primary_id: %q must be a scalar", key)
+			}
+			if f := sch.LookUpField(key); f != nil && f.DBName != "" {
+				where[f.DBName] = val
+				continue
+			}
+			if key != "primary_id" {
+				return nil, fmt.Errorf("primary_id: unknown column %q", key)
+			}
+			if len(sch.PrimaryFields) != 1 {
+				return nil, fmt.Errorf("primary_id: composite key %s needs each key column by name", pkColumns(sch))
+			}
+			where[sch.PrimaryFields[0].DBName] = val
+		}
+	case []any:
+		return nil, errors.New("primary_id must be a scalar or a map")
+	default:
+		if len(sch.PrimaryFields) != 1 {
+			return nil, fmt.Errorf("primary_id: composite key %s needs a map", pkColumns(sch))
+		}
+		where[sch.PrimaryFields[0].DBName] = m
+	}
+	for _, f := range sch.PrimaryFields {
+		if val, ok := where[f.DBName]; !ok || isBlank(val) {
+			return nil, fmt.Errorf("primary_id: missing key column %q (key is %s)", f.DBName, pkColumns(sch))
+		}
+	}
+	return where, nil
+}
+
+// applyUpdate loads the row matching where into model, runs the model's
+// UpdateHooks, writes attrs (still guarded by where) and returns the row
+// reloaded by its primary key.
+func applyUpdate(model any, sch *schema.Schema, name string, where, attrs map[string]any, tx ...*gorm.DB) (any, error) {
 	db := DB(tx...)
-	if err := db.Where(pk).First(model).Error; err != nil {
+	if err := db.Where(where).First(model).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, fmt.Errorf("UpdateFormDB[%s]: record %v not found", tablename, pk)
+			return nil, fmt.Errorf("UpdateFormDB[%s]: record %v not found: %w", name, where, err)
 		}
 		return nil, err
 	}
 
-	modelType := reflect.TypeOf(model).Elem()
-	if fn, ok := hooks.UpdateHooks[modelType]; ok {
+	rv := reflect.ValueOf(model).Elem()
+	if fn, ok := hooks.UpdateHooks[rv.Type()]; ok {
 		fn(model)
 		// Sync the hook's updated_at into attrs so it is written too.
 		if f := sch.LookUpField("updated_at"); f != nil {
-			attrs[f.DBName] = f.ReflectValueOf(context.Background(), reflect.ValueOf(model).Elem()).Interface()
+			attrs[f.DBName] = f.ReflectValueOf(context.Background(), rv).Interface()
 		}
 	}
 
-	if err := db.Model(model).Updates(attrs).Error; err != nil {
-		logLockWaitDiagnostics(err)
-		return nil, fmt.Errorf("UpdateFormDB[%s]: %w", tablename, err)
+	// Reload by primary key only: attrs may change the other where columns
+	// (e.g. clearing otp), so the original where would no longer match.
+	pk := make(map[string]any, len(sch.PrimaryFields))
+	for _, f := range sch.PrimaryFields {
+		pk[f.DBName] = f.ReflectValueOf(context.Background(), rv).Interface()
 	}
 
-	fresh := reflect.New(modelType).Interface()
+	if err := db.Model(model).Where(where).Updates(attrs).Error; err != nil {
+		logLockWaitDiagnostics(err)
+		return nil, fmt.Errorf("UpdateFormDB[%s]: %w", name, err)
+	}
+
+	fresh := reflect.New(rv.Type()).Interface()
 	if err := db.Where(pk).First(fresh).Error; err != nil {
 		return nil, err
 	}

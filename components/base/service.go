@@ -93,7 +93,7 @@ func View[T any](in Payload, transform func(*T) any, params ...any) (any, error)
 	if err != nil {
 		return nil, err
 	}
-	if lib.NotEmpty(transform) {
+	if transform != nil {
 		return transform(item), nil
 	}
 	return item, nil
